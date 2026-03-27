@@ -82,7 +82,7 @@ interface AppState {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  font_size: 14,
+  font_size: 12,
   font_family: "Menlo, Monaco, 'Courier New', monospace",
   theme: 'dark',
   opacity: 1.0,
@@ -93,6 +93,30 @@ const DEFAULT_SETTINGS: Settings = {
   cursor_style: 'block',
   cursor_blink: true,
   bell_style: 'none',
+}
+
+function normalizeSettings(settings: Settings): Settings {
+  const looksLikeLegacyDefaults =
+    (settings.font_size === 14 || settings.font_size === 13) &&
+    settings.font_family === DEFAULT_SETTINGS.font_family &&
+    settings.theme === DEFAULT_SETTINGS.theme &&
+    settings.opacity === DEFAULT_SETTINGS.opacity &&
+    settings.language === DEFAULT_SETTINGS.language &&
+    settings.scrollback === DEFAULT_SETTINGS.scrollback &&
+    settings.show_hidden_files === DEFAULT_SETTINGS.show_hidden_files &&
+    settings.default_protocol === DEFAULT_SETTINGS.default_protocol &&
+    settings.cursor_style === DEFAULT_SETTINGS.cursor_style &&
+    settings.cursor_blink === DEFAULT_SETTINGS.cursor_blink &&
+    settings.bell_style === DEFAULT_SETTINGS.bell_style
+
+  if (!looksLikeLegacyDefaults) {
+    return settings
+  }
+
+  return {
+    ...settings,
+    font_size: DEFAULT_SETTINGS.font_size,
+  }
 }
 
 function makeBookmarkTab(title = 'New Tab', hostId?: string): BookmarkTab {
@@ -160,8 +184,13 @@ export const useStore = create<AppState>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const settings = await invoke<Settings>('get_settings')
+      const fetchedSettings = await invoke<Settings>('get_settings')
+      const settings = normalizeSettings(fetchedSettings)
       set({ settings })
+
+      if (settings.font_size !== fetchedSettings.font_size) {
+        invoke('update_settings', { settings }).catch(() => {})
+      }
     } catch {
       set({ settings: DEFAULT_SETTINGS })
     }

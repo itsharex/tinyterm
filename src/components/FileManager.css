@@ -341,10 +341,26 @@
   border-color: transparent;
 }
 
+.fm-transfer-btn.is-loading {
+  opacity: 1;
+  background: rgba(120, 90, 200, 0.16);
+  border-color: rgba(140, 110, 220, 0.28);
+}
+
 .fm-divider-icon {
   color: var(--color-text-muted);
   opacity: 0.72;
   transition: color 0.12s, opacity 0.12s;
+}
+
+.fm-transfer-spinner {
+  width: 13px;
+  height: 13px;
+  border: 1.8px solid rgba(180, 165, 230, 0.25);
+  border-top-color: rgba(232, 224, 255, 0.92);
+  border-right-color: rgba(232, 224, 255, 0.62);
+  border-radius: 50%;
+  animation: fm-spin 0.65s linear infinite;
 }
 
 .fm-transfer-btn:hover .fm-divider-icon,

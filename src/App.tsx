@@ -12,6 +12,22 @@ import { listen } from '@tauri-apps/api/event'
 import type { TransferProgress, BookmarkTab } from './types'
 import './styles/app.css'
 
+const APP_ZOOM_STORAGE_KEY = 'tinyterm.appZoom'
+const APP_ZOOM_STEP = 0.1
+const APP_ZOOM_MIN = 0.8
+const APP_ZOOM_MAX = 1.4
+
+function clampAppZoom(value: number) {
+  return Math.min(APP_ZOOM_MAX, Math.max(APP_ZOOM_MIN, Number(value.toFixed(2))))
+}
+
+function getInitialAppZoom() {
+  if (typeof window === 'undefined') return 1
+
+  const storedZoom = Number(window.localStorage.getItem(APP_ZOOM_STORAGE_KEY) ?? '1')
+  return Number.isFinite(storedZoom) ? clampAppZoom(storedZoom) : 1
+}
+
 export default function App() {
   const {
     loadAll,
@@ -30,6 +46,7 @@ export default function App() {
   } = useStore()
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [appZoom, setAppZoom] = useState(getInitialAppZoom)
 
   useEffect(() => {
     loadAll()
@@ -39,6 +56,40 @@ export default function App() {
     return () => {
       unlisten.then(fn => fn())
     }
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('zoom', String(appZoom))
+    window.localStorage.setItem(APP_ZOOM_STORAGE_KEY, String(appZoom))
+
+    return () => {
+      document.documentElement.style.removeProperty('zoom')
+    }
+  }, [appZoom])
+
+  useEffect(() => {
+    const handleGlobalZoom = (event: KeyboardEvent) => {
+      const hasZoomModifier = event.ctrlKey || event.metaKey
+      if (!hasZoomModifier || event.altKey) return
+
+      const isZoomIn = event.key === '+' || event.key === '=' || event.key === 'Add' || event.code === 'NumpadAdd'
+      const isZoomOut = event.key === '-' || event.key === '_' || event.key === 'Subtract' || event.code === 'NumpadSubtract'
+      const isZoomReset = event.key === '0' || event.code === 'Digit0' || event.code === 'Numpad0'
+
+      if (!isZoomIn && !isZoomOut && !isZoomReset) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      setAppZoom(currentZoom => {
+        if (isZoomReset) return 1
+        if (isZoomIn) return clampAppZoom(currentZoom + APP_ZOOM_STEP)
+        return clampAppZoom(currentZoom - APP_ZOOM_STEP)
+      })
+    }
+
+    window.addEventListener('keydown', handleGlobalZoom, true)
+    return () => window.removeEventListener('keydown', handleGlobalZoom, true)
   }, [])
 
 

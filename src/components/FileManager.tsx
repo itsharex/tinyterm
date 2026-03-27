@@ -464,7 +464,6 @@ export function FileManager({ session, bookmarkTabId }: Props) {
 
   // Confirm dialog
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null)
-  const [fmLoading, setFmLoading] = useState(false)
   const [transferConflict, setTransferConflict] = useState<TransferConflictState | null>(null)
 
   const transfers = useStore(s => s.transfers)
@@ -539,15 +538,16 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     }
   }, [session.sessionId])
 
-  // Set fmLoading=true BEFORE the browser paints when FM opens.
-  // useLayoutEffect fires synchronously after DOM mutation but before paint,
-  // so calling setFmLoading(true) here forces a re-render+commit that the
-  // browser paints as the loading indicator — no empty-panel flash.
+  // Prime panel-level loading state before the first paint after expand so
+  // the shell opens immediately and each side renders its own loading state.
   useLayoutEffect(() => {
     if (!!session.fmOpen && !prevFmOpenRef.current) {
-      setFmLoading(true)
+      setLocalLoading(true)
+      if (session.sessionId && session.status === 'connected') {
+        setRemoteLoading(true)
+      }
     }
-  }, [session.fmOpen])
+  }, [session.fmOpen, session.sessionId, session.status])
 
   // Load when file manager is opened — triggers every time fmOpen goes false→true
   useEffect(() => {
@@ -556,15 +556,11 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     prevFmOpenRef.current = isOpen
 
     if (!isOpen) {
-      setFmLoading(false)
       return
     }
 
     // Only act on the rising edge (closed → opened)
     if (wasOpen) return
-
-    // fmLoading was already set to true by useLayoutEffect above;
-    // just kick off the data loading and clear it when done.
 
     const localPromise = localPath
       ? loadLocal(localPath)
@@ -597,9 +593,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         .catch(() => { /* non-Linux or exec failed — phase 1 result is fine */ })
     }
 
-    Promise.allSettled([localPromise, remotePromise]).finally(() => {
-      setFmLoading(false)
-    })
+    Promise.allSettled([localPromise, remotePromise]).catch(() => {})
   }, [session.fmOpen])
 
   // Live-follow: when the file manager is already open and the user cds in the
@@ -1653,6 +1647,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   // ── Collapse bar ──────────────────────────────────────────────────────────
 
   const activeTransfers = transfers.filter(t => t.status !== 'done')
+  const uploadBusy = transfers.some(t => t.direction === 'upload' && (t.status === 'pending' || t.status === 'transferring' || t.status === 'conflict'))
+  const downloadBusy = transfers.some(t => t.direction === 'download' && (t.status === 'pending' || t.status === 'transferring' || t.status === 'conflict'))
 
   return (
     <div
@@ -1667,19 +1663,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           {/* Transfer queue */}
           <TransferQueue transfers={transfers} onCancel={handleCancelTransfer} />
 
-          {fmLoading ? (
-            <div className="fm-loading">
-              <span className="fm-loading-spinner" />
-              <span className="fm-loading-text">
-                文件管理加载中
-                <span className="fm-loading-dot" />
-                <span className="fm-loading-dot" />
-                <span className="fm-loading-dot" />
-              </span>
-            </div>
-          ) : (
-            /* Dual panels */
-            <div className="fm-panels">
+          {/* Dual panels */}
+          <div className="fm-panels">
             {/* Left — Local */}
             <Panel
               side="local"
@@ -1707,22 +1692,26 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               <div className="fm-divider-line" />
               <div className="fm-divider-arrows">
                 <button
-                  className="fm-transfer-btn"
+                  className={`fm-transfer-btn${uploadBusy ? ' is-loading' : ''}`}
                   onClick={handleTransferToRemote}
-                  title="上传选中文件到远程当前目录"
+                  title={uploadBusy ? '上传中...' : '上传选中文件到远程当前目录'}
                   type="button"
-                  disabled={localDeleting || remoteDeleting}
+                  disabled={localDeleting || remoteDeleting || uploadBusy}
                 >
-                  <ArrowRight size={14} strokeWidth={2} className="fm-divider-icon" />
+                  {uploadBusy
+                    ? <span className="fm-transfer-spinner" />
+                    : <ArrowRight size={14} strokeWidth={2} className="fm-divider-icon" />}
                 </button>
                 <button
-                  className="fm-transfer-btn"
+                  className={`fm-transfer-btn${downloadBusy ? ' is-loading' : ''}`}
                   onClick={handleTransferToLocal}
-                  title="下载选中文件到本地当前目录"
+                  title={downloadBusy ? '下载中...' : '下载选中文件到本地当前目录'}
                   type="button"
-                  disabled={localDeleting || remoteDeleting}
+                  disabled={localDeleting || remoteDeleting || downloadBusy}
                 >
-                  <ArrowLeft size={14} strokeWidth={2} className="fm-divider-icon" />
+                  {downloadBusy
+                    ? <span className="fm-transfer-spinner" />
+                    : <ArrowLeft size={14} strokeWidth={2} className="fm-divider-icon" />}
                 </button>
               </div>
               <div className="fm-divider-line" />
@@ -1750,7 +1739,6 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               onContextMenu={(e, file) => setCtxMenu({ x: e.clientX, y: e.clientY, file, side: 'remote' })}
             />
           </div>
-          )}
         </div>
       )}
 

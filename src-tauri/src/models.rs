@@ -140,7 +140,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            font_size: 14,
+            font_size: 12,
             font_family: "Menlo, Monaco, 'Courier New', monospace".to_string(),
             theme: "dark".to_string(),
             opacity: 1.0,

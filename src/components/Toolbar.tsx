@@ -10,13 +10,13 @@ export function Toolbar() {
     <div className="toolbar">
       <div className="toolbar-pill">
         <ToolbarBtn
-          icon={<ShieldCheck size={14} strokeWidth={1.8} />}
+          icon={<ShieldCheck size={12} strokeWidth={1.9} />}
           label="凭据"
           onClick={openCredentialsModal}
         />
         <div className="toolbar-divider" />
         <ToolbarBtn
-          icon={<Server size={14} strokeWidth={1.8} />}
+          icon={<Server size={12} strokeWidth={1.9} />}
           label="主机"
           onClick={openHostsModal}
         />

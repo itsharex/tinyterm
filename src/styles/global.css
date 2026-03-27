@@ -23,8 +23,8 @@
   --color-success: #4caf8a;
   --color-error: #e55;
   --color-warning: #f0a040;
-  --color-terminal-bg: rgba(8, 5, 20, 0.95);
-  --color-terminal-text: #c8ffc8;
+  --color-terminal-bg: rgba(8, 17, 27, 0.96);
+  --color-terminal-text: #d7e3f0;
   --font-mono: 'Menlo', 'Monaco', 'Courier New', monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --radius-sm: 6px;

@@ -8,6 +8,30 @@ import { useStore } from '../store'
 import '@xterm/xterm/css/xterm.css'
 import './TerminalView.css'
 
+const TERMINAL_THEME = {
+  background: '#08111b',
+  foreground: '#aebdca',
+  cursor: '#ffbf69',
+  cursorAccent: '#08111b',
+  selectionBackground: 'rgba(115, 167, 255, 0.24)',
+  black: '#16202b',
+  red: '#ef6b73',
+  green: '#7ccf92',
+  yellow: '#e7c36f',
+  blue: '#73a7ff',
+  magenta: '#c792ea',
+  cyan: '#66c7d1',
+  white: '#b7c4cf',
+  brightBlack: '#55606d',
+  brightRed: '#ff8b94',
+  brightGreen: '#99e6a8',
+  brightYellow: '#ffd98a',
+  brightBlue: '#94c2ff',
+  brightMagenta: '#ddb3ff',
+  brightCyan: '#8be0e8',
+  brightWhite: '#d7e1ea',
+}
+
 function encodeKeyEvent(event: KeyboardEvent): string | null {
   if (event.metaKey) return null
 
@@ -105,31 +129,9 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     const term = new Terminal({
       cursorBlink: settings?.cursor_blink ?? true,
       cursorStyle: (settings?.cursor_style as any) ?? 'block',
-      fontSize: settings?.font_size ?? 14,
+      fontSize: settings?.font_size ?? 12,
       fontFamily: settings?.font_family ?? "Menlo, Monaco, 'Courier New', monospace",
-      theme: {
-        background: '#050310',
-        foreground: '#c8ffc8',
-        cursor: '#9b7ee0',
-        cursorAccent: '#1a1035',
-        selectionBackground: 'rgba(130, 100, 220, 0.3)',
-        black: '#1a1035',
-        red: '#e55',
-        green: '#4caf8a',
-        yellow: '#f0a040',
-        blue: '#4a90e2',
-        magenta: '#b06add',
-        cyan: '#40c0c0',
-        white: '#c8ffc8',
-        brightBlack: '#5a4a7a',
-        brightRed: '#ff6666',
-        brightGreen: '#66ffaa',
-        brightYellow: '#ffc060',
-        brightBlue: '#66aaff',
-        brightMagenta: '#cc88ff',
-        brightCyan: '#66dddd',
-        brightWhite: '#ffffff',
-      },
+      theme: TERMINAL_THEME,
       scrollback: settings?.scrollback ?? 5000,
       allowTransparency: false,
     })
@@ -209,7 +211,16 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       xtermRef.current = null
       fitAddonRef.current = null
     }
-  }, [backendSessionId, session.sessionId, session.status])
+  }, [
+    backendSessionId,
+    session.sessionId,
+    session.status,
+    settings?.cursor_blink,
+    settings?.cursor_style,
+    settings?.font_family,
+    settings?.font_size,
+    settings?.scrollback,
+  ])
 
   // Re-fit when the tab becomes visible
   useEffect(() => {
