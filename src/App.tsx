@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, X, Server, ChevronLeft, ChevronRight } from 'lucide-react'
-import logoSrc from '/assets/logo.png'
+import logoSrc from './assets/logo.png'
 import { useStore } from './store'
 import { Toolbar } from './components/Toolbar'
 import { TerminalView } from './components/TerminalView'
