@@ -146,6 +146,27 @@
   text-align: right;
 }
 
+.fm-transfer-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.fm-transfer-cancel:hover {
+  background: rgba(220, 50, 50, 0.2);
+  color: var(--color-error);
+}
+
 /* ── Dual panels container ────────────────────────────────────────────────── */
 
 .fm-panels {

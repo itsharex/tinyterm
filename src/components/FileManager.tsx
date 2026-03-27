@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core'
 import {
   ChevronUp, ChevronDown, Folder, File as FileIcon2,
   RefreshCw, FolderPlus, Trash2, Pencil, HardDrive,
-  ArrowRight, ArrowLeft, Monitor, Server, Eye, EyeOff,
+  ArrowRight, ArrowLeft, Monitor, Server, Eye, EyeOff, X,
 } from 'lucide-react'
 import type { FileInfo, SessionTab } from '../types'
 import { useStore } from '../store'
@@ -52,13 +52,12 @@ type InlineAction =
   | { type: 'new-folder'; side: 'local' | 'remote'; value: string }
 
 function ContextMenu({
-  menu, onClose, onDelete, onRename, onNewFolder, deleteLabel = '删除',
+  menu, onClose, onDelete, onRename, deleteLabel = '删除',
 }: {
   menu: CtxMenu
   onClose: () => void
   onDelete: (f: FileInfo, side: 'local' | 'remote') => void
   onRename: (f: FileInfo, side: 'local' | 'remote') => void
-  onNewFolder: (side: 'local' | 'remote') => void
   deleteLabel?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -76,9 +75,6 @@ function ContextMenu({
     >
       <div className="fm-ctx-item" onClick={() => { onRename(menu.file, menu.side); onClose() }}>
         <Pencil size={12} strokeWidth={1.8} /> 重命名
-      </div>
-      <div className="fm-ctx-item" onClick={() => { onNewFolder(menu.side); onClose() }}>
-        <FolderPlus size={12} strokeWidth={1.8} /> 新建文件夹
       </div>
       <div className="fm-ctx-divider" />
       <div className="fm-ctx-item danger" onClick={() => { onDelete(menu.file, menu.side); onClose() }}>
@@ -225,7 +221,36 @@ function Panel({
 
 // ── Transfer Queue ─────────────────────────────────────────────────────────────
 
-function TransferQueue({ transfers }: { transfers: TransferProgress[] }) {
+interface ConfirmDialogProps {
+  title: string
+  message: string
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+  return createPortal(
+    <div className="modal-overlay" style={{ zIndex: 3000 }}>
+      <div className="cf-shell" onClick={e => e.stopPropagation()}>
+        <div className="cm-header">
+          <div className="cm-header-left">
+            <span>{title}</span>
+          </div>
+        </div>
+        <div className="cf-body">
+          <p style={{ margin: 0, color: 'var(--color-text-primary)' }}>{message}</p>
+        </div>
+        <div className="cf-footer">
+          <button className="btn-ghost" onClick={onCancel}>取消</button>
+          <button className="btn-primary" onClick={onConfirm}>确定</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+function TransferQueue({ transfers, onCancel }: { transfers: TransferProgress[]; onCancel: (fileName: string) => void }) {
   const active = transfers.filter((t: TransferProgress) => t.status !== 'done')
   if (active.length === 0) return null
   return (
@@ -247,6 +272,15 @@ function TransferQueue({ transfers }: { transfers: TransferProgress[] }) {
           <span className="fm-transfer-pct">
             {t.total ? Math.round((t.transferred / t.total) * 100) : 0}%
           </span>
+          {t.status === 'transferring' && (
+            <button
+              className="fm-transfer-cancel"
+              onClick={() => onCancel(t.file_name)}
+              title="取消"
+            >
+              <X size={12} strokeWidth={2} />
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -254,6 +288,12 @@ function TransferQueue({ transfers }: { transfers: TransferProgress[] }) {
 }
 
 // ── Main FileManager ───────────────────────────────────────────────────────────
+
+interface ConfirmState {
+  title: string
+  message: string
+  onConfirm: () => void
+}
 
 export function FileManager({ session, bookmarkTabId }: Props) {
   // Local panel state
@@ -282,7 +322,11 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
   const [inlineAction, setInlineAction] = useState<InlineAction | null>(null)
 
+  // Confirm dialog
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null)
+
   const transfers = useStore(s => s.transfers)
+  const updateTransfer = useStore(s => s.updateTransfer)
   const toggleFm = useStore(s => s.toggleFm)
   const updateSessionPath = useStore(s => s.updateSessionPath)
   const collapsed = !session.fmOpen
@@ -514,6 +558,19 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       })
       return
     }
+
+    // Start transfers as pending
+    for (const localFilePath of localFilePaths) {
+      const fileName = localFilePath.split('/').pop() ?? 'file'
+      updateTransfer({
+        file_name: fileName,
+        direction: 'upload',
+        total: 0,
+        transferred: 0,
+        status: 'pending',
+      })
+    }
+
     try {
       for (const localFilePath of localFilePaths) {
         const fileName = localFilePath.split('/').pop() ?? 'file'
@@ -537,7 +594,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       console.error('[tinyterm:fm:upload:error]', e)
       alert('上传失败: ' + String(e))
     }
-  }, [session.sessionId, loadRemote])
+  }, [session.sessionId, loadRemote, updateTransfer])
 
   // ── Download (remote → local) ─────────────────────────────────────────────
 
@@ -553,6 +610,19 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       })
       return
     }
+
+    // Start transfers as pending
+    for (const remoteFilePath of remoteFilePaths) {
+      const fileName = remoteFilePath.split('/').pop() ?? 'file'
+      updateTransfer({
+        file_name: fileName,
+        direction: 'download',
+        total: 0,
+        transferred: 0,
+        status: 'pending',
+      })
+    }
+
     try {
       for (const remoteFilePath of remoteFilePaths) {
         const fileName = remoteFilePath.split('/').pop() ?? 'file'
@@ -576,7 +646,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       console.error('[tinyterm:fm:download:error]', e)
       alert('下载失败: ' + String(e))
     }
-  }, [session.sessionId, loadLocal])
+  }, [session.sessionId, loadLocal, updateTransfer])
 
   // ── Arrow button transfers ────────────────────────────────────────────────
 
@@ -593,7 +663,16 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       alert('请先在本地面板选择要上传的文件')
       return
     }
-    doUpload(selectedLocalTransferPaths, remotePath)
+    const fileCount = selectedLocalTransferPaths.length
+    const fileNames = selectedLocalTransferPaths.map(p => p.split('/').pop()).join(', ')
+    setConfirmDialog({
+      title: '确认上传',
+      message: `确定上传 ${fileCount} 个文件到远程目录？\n${fileNames.length > 100 ? fileNames.slice(0, 100) + '...' : fileNames}`,
+      onConfirm: () => {
+        setConfirmDialog(null)
+        doUpload(selectedLocalTransferPaths, remotePath)
+      },
+    })
   }
 
   const handleTransferToLocal = () => {
@@ -601,7 +680,29 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       alert('请先在远程面板选择要下载的文件')
       return
     }
-    doDownload(selectedRemoteTransferPaths, localPath)
+    const fileCount = selectedRemoteTransferPaths.length
+    const fileNames = selectedRemoteTransferPaths.map(p => p.split('/').pop()).join(', ')
+    setConfirmDialog({
+      title: '确认下载',
+      message: `确定下载 ${fileCount} 个文件到本地目录？\n${fileNames.length > 100 ? fileNames.slice(0, 100) + '...' : fileNames}`,
+      onConfirm: () => {
+        setConfirmDialog(null)
+        doDownload(selectedRemoteTransferPaths, localPath)
+      },
+    })
+  }
+
+  const handleCancelTransfer = (fileName: string) => {
+    // Mark transfer as cancelled - the backend doesn't support cancellation yet
+    // but we can at least update the UI state
+    updateTransfer({
+      file_name: fileName,
+      direction: 'upload', // direction doesn't matter for cancellation
+      total: 0,
+      transferred: 0,
+      status: 'error',
+      error: '用户取消',
+    })
   }
 
   // ── CRUD operations ───────────────────────────────────────────────────────
@@ -723,7 +824,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       {!collapsed && (
         <div className="fm-content glass-panel">
           {/* Transfer queue */}
-          <TransferQueue transfers={transfers} />
+          <TransferQueue transfers={transfers} onCancel={handleCancelTransfer} />
 
           {/* Dual panels */}
           <div className="fm-panels">
@@ -794,6 +895,15 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         </div>
       )}
 
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
       {inlineAction && (
         <div className="modal-overlay" style={{ zIndex: 2100 }}>
           <div className="cf-shell" onClick={e => e.stopPropagation()}>
@@ -852,7 +962,6 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           onClose={() => setCtxMenu(null)}
           onDelete={handleDelete}
           onRename={handleRename}
-          onNewFolder={handleNewFolder}
           deleteLabel={
             (() => {
               const selectedPaths = ctxMenu.side === 'local' ? selectedLocalPaths : selectedRemotePaths
