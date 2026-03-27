@@ -141,3 +141,9 @@ target/
 # Temporary files
 tmp/
 temp/
+
+# Project specific ignores
+node_modules/
+dist/
+target/
+src-tauri/target/
