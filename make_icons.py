@@ -316,6 +316,9 @@ def main() -> None:
     (ICONS_DIR / "32x32.png").write_bytes(png_variants[32])
     print(f"Created {ICONS_DIR / '32x32.png'}")
 
+    (ICONS_DIR / "64x64.png").write_bytes(png_variants[64])
+    print(f"Created {ICONS_DIR / '64x64.png'}")
+
     (ICONS_DIR / "128x128.png").write_bytes(png_variants[128])
     print(f"Created {ICONS_DIR / '128x128.png'}")
 
