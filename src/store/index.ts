@@ -655,13 +655,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateTransfer: (progress) => {
     set(state => {
-      const idx = state.transfers.findIndex(t => t.file_name === progress.file_name)
+      const transferId = progress.id || `${progress.direction}:${progress.file_name}`
+      const idx = state.transfers.findIndex(t => (t.id || `${t.direction}:${t.file_name}`) === transferId)
       if (idx >= 0) {
         const transfers = [...state.transfers]
-        transfers[idx] = progress
+        transfers[idx] = { ...transfers[idx], ...progress, id: transferId }
         return { transfers }
       }
-      return { transfers: [...state.transfers, progress] }
+      return { transfers: [...state.transfers, { ...progress, id: transferId }] }
     })
   },
 }))

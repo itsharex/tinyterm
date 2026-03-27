@@ -47,17 +47,24 @@ pub fn run() {
             commands::ssh::resize_terminal,
             commands::ssh::subscribe_session,
             commands::ssh::get_remote_cwd,
+            commands::ssh::execute_remote_command,
             // SFTP commands
             commands::sftp::list_remote_dir,
             commands::sftp::list_local_dir,
+            commands::sftp::scan_remote_folder,
             commands::sftp::upload_file,
             commands::sftp::download_file,
+            commands::sftp::cancel_transfer,
             commands::sftp::delete_remote,
+            commands::sftp::delete_remote_async,
             commands::sftp::create_remote_dir,
             commands::sftp::delete_local,
             commands::sftp::create_local_dir,
             commands::sftp::rename_local,
             commands::sftp::rename_remote,
+            // Local FS commands
+            commands::local_fs::pack_local_dir,
+            commands::local_fs::unpack_local_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

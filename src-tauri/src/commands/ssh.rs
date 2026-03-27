@@ -389,3 +389,44 @@ pub fn get_remote_cwd(
 
     result
 }
+
+#[tauri::command]
+pub fn execute_remote_command(
+    session_id: String,
+    command: String,
+    session_manager: tauri::State<'_, crate::session::SessionManager>,
+) -> Result<String, String> {
+    let sessions = session_manager.sessions.lock();
+    let session = sessions
+        .get(&session_id)
+        .ok_or("Session disconnected")?;
+
+    let sess = session.session.lock();
+    sess.set_blocking(true);
+    let result = (|| -> Result<String, String> {
+        let mut channel = sess
+            .channel_session()
+            .map_err(|e| format!("channel_session: {}", e))?;
+        channel.exec(&command).map_err(|e| format!("exec: {}", e))?;
+
+        let mut s = String::new();
+        use std::io::Read;
+        channel.read_to_string(&mut s).map_err(|e| format!("read: {}", e))?;
+        channel.wait_close().map_err(|e| format!("wait_close: {}", e))?;
+
+        let exit_status = channel.exit_status().unwrap_or(-1);
+        if exit_status != 0 {
+            let mut stderr = String::new();
+            let mut stderr_channel = channel.stderr();
+            let _ = stderr_channel.read_to_string(&mut stderr);
+            return Err(format!("Command failed with exit code {}: {}, {}", exit_status, s, stderr));
+        }
+
+        Ok(s)
+    })();
+
+    sess.set_timeout(0);
+    sess.set_blocking(false);
+
+    result
+}

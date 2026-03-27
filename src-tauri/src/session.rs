@@ -1,6 +1,6 @@
 use parking_lot::Mutex;
 use ssh2::Session;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
@@ -37,12 +37,14 @@ pub struct SshSession {
 
 pub struct SessionManager {
     pub sessions: Mutex<HashMap<String, SshSession>>,
+    pub cancelled_transfers: Arc<Mutex<HashSet<String>>>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            cancelled_transfers: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 }

@@ -74,12 +74,17 @@ export interface FileInfo {
 }
 
 export interface TransferProgress {
+  id: string
   file_name: string
   direction: 'upload' | 'download'
   total: number
   transferred: number
-  status: 'pending' | 'transferring' | 'done' | 'error'
+  transferred_bytes?: number  // bytes transferred so far (for folder downloads)
+  status: 'pending' | 'transferring' | 'done' | 'error' | 'conflict'
   error?: string
+  target_path?: string
+  conflict_path?: string
+  conflict_is_dir?: boolean
 }
 
 // A "bookmark tab" is a top-level tab corresponding to a Host

@@ -175,7 +175,18 @@ pub struct TransferProgress {
     pub direction: String, // "upload" | "download"
     pub total: u64,
     pub transferred: u64,
-    pub status: String, // "pending" | "transferring" | "done" | "error"
+    pub status: String, // "pending" | "transferring" | "done" | "error" | "conflict"
+    pub error: Option<String>,
+    pub target_path: Option<String>,
+    pub conflict_path: Option<String>,
+    pub conflict_is_dir: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteDeleteStatus {
+    pub path: String,
+    pub is_dir: bool,
+    pub success: bool,
     pub error: Option<String>,
 }
 
