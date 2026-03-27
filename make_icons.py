@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-LOGO_PATH = ROOT / "public" / "assets" / "logo.png"
+LOGO_PATH = ROOT / "src" / "assets" / "logo.png"
 ICONS_DIR = ROOT / "src-tauri" / "icons"
-
+print(f"Using logo: {LOGO_PATH}")
 
 def _read_chunks(data: bytes):
     offset = 8
