@@ -112,7 +112,7 @@ interface PanelProps {
 }
 
 function Panel({
-  side, title, icon, files, currentPath, loading, error,
+  side: _side, title, icon, files, currentPath, loading, error,
   selectedPaths, onSelectionChange, onNavigate, onGoUp, onToggleHidden, showHidden, onRefresh, onNewFolder, onContextMenu,
 }: PanelProps) {
   const [editingPath, setEditingPath] = useState(false)
