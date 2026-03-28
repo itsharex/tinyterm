@@ -1,14 +1,11 @@
 use tauri::State;
 
+use crate::crypto;
 use crate::models::{Bookmark, BookmarkGroup};
-use crate::secrets::{
-    delete_bookmark_secrets, get_bookmark_passphrase, get_bookmark_password,
-    get_bookmark_private_key, set_bookmark_passphrase, set_bookmark_password,
-    set_bookmark_private_key,
-};
 use crate::storage::{self, DbPath};
 
 fn resolve_bookmark_password(
+    db_path: &DbPath,
     bookmark: &Bookmark,
     existing_bookmark: Option<&Bookmark>,
 ) -> Result<Option<String>, String> {
@@ -16,37 +13,51 @@ fn resolve_bookmark_password(
         return Ok(Some(password.to_string()));
     }
 
-    if let Some(password) = get_bookmark_password(&bookmark.id).map_err(|e| e.to_string())? {
-        return Ok(Some(password));
-    }
-
-    Ok(existing_bookmark.and_then(|existing| {
+    if let Some(password) = existing_bookmark.and_then(|existing| {
         existing.password.as_ref().and_then(|password| {
             if password.is_empty() {
                 None
-            } else if existing.password_encrypted {
-                Some(crate::models::decode_password(password))
             } else {
                 Some(password.clone())
             }
         })
-    }))
+    }) {
+        if crypto::is_encrypted_secret(&password) {
+            return crypto::decrypt_secret(&db_path.0, &password)
+                .map(Some)
+                .map_err(|e| e.to_string());
+        }
+
+        return Ok(Some(if existing_bookmark.is_some_and(|existing| existing.password_encrypted) {
+            crate::models::decode_password(&password)
+        } else {
+            password
+        }));
+    }
+
+    Ok(None)
 }
 
 fn resolve_bookmark_plain_secret(
+    db_path: &DbPath,
     incoming_value: Option<&str>,
-    existing_keychain_value: Option<String>,
     existing_db_value: Option<&String>,
 ) -> Result<Option<String>, String> {
     if let Some(value) = incoming_value.filter(|value| !value.is_empty()) {
         return Ok(Some(value.to_string()));
     }
 
-    if let Some(value) = existing_keychain_value {
+    if let Some(value) = existing_db_value.cloned().filter(|value| !value.is_empty()) {
+        if crypto::is_encrypted_secret(&value) {
+            return crypto::decrypt_secret(&db_path.0, &value)
+                .map(Some)
+                .map_err(|e| e.to_string());
+        }
+
         return Ok(Some(value));
     }
 
-    Ok(existing_db_value.cloned().filter(|value| !value.is_empty()))
+    Ok(None)
 }
 
 fn redact_bookmark(bookmark: &mut Bookmark) {
@@ -73,33 +84,34 @@ pub fn create_bookmark(db_path: State<DbPath>, mut bookmark: Bookmark) -> Result
     match bookmark.auth_type.as_str() {
         "password" => {
             let password = bookmark.password.clone().filter(|value| !value.is_empty());
-            set_bookmark_password(&bookmark.id, password.as_deref()).map_err(|e| e.to_string())?;
-            delete_bookmark_secrets(&bookmark.id, &["private_key", "passphrase"])
-                .map_err(|e| e.to_string())?;
 
             bookmark.password = password
-                .as_ref()
-                .map(|value| crate::models::encode_password(value));
+                .map(|value| crypto::encrypt_secret(&db_path.0, &value))
+                .transpose()
+                .map_err(|e| e.to_string())?;
             bookmark.password_encrypted = bookmark.password.is_some();
             bookmark.private_key = None;
             bookmark.passphrase = None;
         }
         "privateKey" => {
-            set_bookmark_private_key(&bookmark.id, bookmark.private_key.as_deref())
-                .map_err(|e| e.to_string())?;
-            set_bookmark_passphrase(&bookmark.id, bookmark.passphrase.as_deref())
-                .map_err(|e| e.to_string())?;
-            delete_bookmark_secrets(&bookmark.id, &["password"]).map_err(|e| e.to_string())?;
-
             bookmark.password = None;
             bookmark.password_encrypted = false;
-            bookmark.private_key = None;
-            bookmark.passphrase = None;
+            bookmark.private_key = bookmark
+                .private_key
+                .clone()
+                .filter(|value| !value.is_empty())
+                .map(|value| crypto::encrypt_secret(&db_path.0, &value))
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            bookmark.passphrase = bookmark
+                .passphrase
+                .clone()
+                .filter(|value| !value.is_empty())
+                .map(|value| crypto::encrypt_secret(&db_path.0, &value))
+                .transpose()
+                .map_err(|e| e.to_string())?;
         }
         _ => {
-            delete_bookmark_secrets(&bookmark.id, &["password", "private_key", "passphrase"])
-                .map_err(|e| e.to_string())?;
-
             bookmark.password = None;
             bookmark.password_encrypted = false;
             bookmark.private_key = None;
@@ -123,43 +135,40 @@ pub fn update_bookmark(db_path: State<DbPath>, mut bookmark: Bookmark) -> Result
 
     match bookmark.auth_type.as_str() {
         "password" => {
-            let password = resolve_bookmark_password(&bookmark, existing_bookmark.as_ref())?;
-            set_bookmark_password(&bookmark.id, password.as_deref()).map_err(|e| e.to_string())?;
-            delete_bookmark_secrets(&bookmark.id, &["private_key", "passphrase"])
-                .map_err(|e| e.to_string())?;
+            let password = resolve_bookmark_password(&db_path, &bookmark, existing_bookmark.as_ref())?;
 
             bookmark.password = password
-                .as_ref()
-                .map(|value| crate::models::encode_password(value));
+                .map(|value| crypto::encrypt_secret(&db_path.0, &value))
+                .transpose()
+                .map_err(|e| e.to_string())?;
             bookmark.password_encrypted = bookmark.password.is_some();
             bookmark.private_key = None;
             bookmark.passphrase = None;
         }
         "privateKey" => {
             let private_key = resolve_bookmark_plain_secret(
+                &db_path,
                 bookmark.private_key.as_deref(),
-                get_bookmark_private_key(&bookmark.id).map_err(|e| e.to_string())?,
                 existing_bookmark.as_ref().and_then(|existing| existing.private_key.as_ref()),
             )?;
             let passphrase = resolve_bookmark_plain_secret(
+                &db_path,
                 bookmark.passphrase.as_deref(),
-                get_bookmark_passphrase(&bookmark.id).map_err(|e| e.to_string())?,
                 existing_bookmark.as_ref().and_then(|existing| existing.passphrase.as_ref()),
             )?;
 
-            set_bookmark_private_key(&bookmark.id, private_key.as_deref()).map_err(|e| e.to_string())?;
-            set_bookmark_passphrase(&bookmark.id, passphrase.as_deref()).map_err(|e| e.to_string())?;
-            delete_bookmark_secrets(&bookmark.id, &["password"]).map_err(|e| e.to_string())?;
-
             bookmark.password = None;
             bookmark.password_encrypted = false;
-            bookmark.private_key = None;
-            bookmark.passphrase = None;
+            bookmark.private_key = private_key
+                .map(|value| crypto::encrypt_secret(&db_path.0, &value))
+                .transpose()
+                .map_err(|e| e.to_string())?;
+            bookmark.passphrase = passphrase
+                .map(|value| crypto::encrypt_secret(&db_path.0, &value))
+                .transpose()
+                .map_err(|e| e.to_string())?;
         }
         _ => {
-            delete_bookmark_secrets(&bookmark.id, &["password", "private_key", "passphrase"])
-                .map_err(|e| e.to_string())?;
-
             bookmark.password = None;
             bookmark.password_encrypted = false;
             bookmark.private_key = None;
@@ -181,8 +190,6 @@ pub fn update_bookmark(db_path: State<DbPath>, mut bookmark: Bookmark) -> Result
 
 #[tauri::command]
 pub fn delete_bookmark(db_path: State<DbPath>, id: String) -> Result<(), String> {
-    delete_bookmark_secrets(&id, &["password", "private_key", "passphrase"])
-        .map_err(|e| e.to_string())?;
     storage::delete_bookmark(&db_path, &id).map_err(|e| e.to_string())
 }
 

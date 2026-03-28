@@ -1,6 +1,6 @@
 pub mod commands;
+pub mod crypto;
 pub mod models;
-pub mod secrets;
 pub mod session;
 pub mod ssh;
 pub mod storage;
@@ -19,8 +19,8 @@ pub fn run() {
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
             let db_path = app_dir.join("tinyterm.db");
             storage::init_db(&db_path).expect("failed to initialize database");
-            storage::migrate_secrets_to_keychain(&storage::DbPath(db_path.clone()))
-                .expect("failed to migrate secrets to keychain");
+            storage::normalize_stored_secrets(&storage::DbPath(db_path.clone()))
+                .expect("failed to normalize stored secrets");
             app.manage(storage::DbPath(db_path));
             app.manage(session::SessionManager::new());
             Ok(())

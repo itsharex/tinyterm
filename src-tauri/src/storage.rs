@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::path::PathBuf;
+use crate::crypto;
 use crate::models::{Bookmark, BookmarkGroup, Profile, Settings, TrustedHostKey};
 
 pub struct DbPath(pub PathBuf);
@@ -200,13 +201,7 @@ pub fn get_trusted_host_key(db_path: &DbPath, host: &str, port: u16) -> Result<O
     }
 }
 
-pub fn migrate_secrets_to_keychain(db_path: &DbPath) -> Result<()> {
-    use crate::secrets::{
-        delete_bookmark_secrets, delete_profile_secrets, set_bookmark_passphrase,
-        set_bookmark_password, set_bookmark_private_key, set_profile_passphrase,
-        set_profile_password, set_profile_private_key,
-    };
-
+pub fn normalize_stored_secrets(db_path: &DbPath) -> Result<()> {
     let conn = get_conn(db_path)?;
 
     {
@@ -232,27 +227,63 @@ pub fn migrate_secrets_to_keychain(db_path: &DbPath) -> Result<()> {
             }
 
             if auth_type == "password" {
-                if let Some(password) = password.filter(|value| !value.is_empty()) {
-                    let decoded = if password_encrypted { crate::models::decode_password(&password) } else { password };
-                    set_bookmark_password(&id, Some(&decoded))?;
-                }
-                delete_bookmark_secrets(&id, &["private_key", "passphrase"])?;
+                let synced_password = password
+                    .filter(|value| !value.is_empty())
+                    .map(|password| {
+                        let plaintext = if crypto::is_encrypted_secret(&password) {
+                            crypto::decrypt_secret(&db_path.0, &password)?
+                        } else if password_encrypted {
+                            crate::models::decode_password(&password)
+                        } else {
+                            password
+                        };
+
+                        crypto::encrypt_secret(&db_path.0, &plaintext)
+                    })
+                    .transpose()?;
+
+                let password_present = synced_password.is_some() as i32;
+                conn.execute(
+                    "UPDATE bookmarks SET password=?2, password_encrypted=?3, private_key=NULL, passphrase=NULL WHERE id=?1",
+                    params![id, synced_password, password_present],
+                )?;
             } else if auth_type == "privateKey" {
-                if let Some(private_key) = private_key.as_deref().filter(|value| !value.is_empty()) {
-                    set_bookmark_private_key(&id, Some(private_key))?;
-                }
-                if let Some(passphrase) = passphrase.as_deref().filter(|value| !value.is_empty()) {
-                    set_bookmark_passphrase(&id, Some(passphrase))?;
-                }
-                delete_bookmark_secrets(&id, &["password"])?;
+                let synced_private_key = private_key
+                    .filter(|value| !value.is_empty())
+                    .map(|value| {
+                        if crypto::is_encrypted_secret(&value) {
+                            Ok(value)
+                        } else {
+                            crypto::encrypt_secret(&db_path.0, &value)
+                        }
+                    })
+                    .transpose()?;
+                let synced_passphrase = passphrase
+                    .filter(|value| !value.is_empty())
+                    .map(|value| {
+                        if crypto::is_encrypted_secret(&value) {
+                            Ok(value)
+                        } else {
+                            crypto::encrypt_secret(&db_path.0, &value)
+                        }
+                    })
+                    .transpose()?;
+
+                conn.execute(
+                    "UPDATE bookmarks SET password=NULL, password_encrypted=0, private_key=?2, passphrase=?3 WHERE id=?1",
+                    params![id, synced_private_key, synced_passphrase],
+                )?;
             } else {
-                delete_bookmark_secrets(&id, &["password", "private_key", "passphrase"])?;
+                conn.execute(
+                    "UPDATE bookmarks SET password=NULL, password_encrypted=0, private_key=NULL, passphrase=NULL WHERE id=?1",
+                    params![id],
+                )?;
             }
         }
     }
 
     conn.execute(
-        "UPDATE bookmarks SET password=NULL, password_encrypted=0, private_key=NULL, passphrase=NULL",
+        "UPDATE bookmarks SET private_key=NULL, passphrase=NULL WHERE auth_type != 'privateKey'",
         [],
     )?;
 
@@ -275,27 +306,63 @@ pub fn migrate_secrets_to_keychain(db_path: &DbPath) -> Result<()> {
             let (id, auth_type, password, password_encrypted, private_key, passphrase) = row?;
 
             if auth_type == "password" {
-                if let Some(password) = password.filter(|value| !value.is_empty()) {
-                    let decoded = if password_encrypted { crate::models::decode_password(&password) } else { password };
-                    set_profile_password(&id, Some(&decoded))?;
-                }
-                delete_profile_secrets(&id, &["private_key", "passphrase"])?;
+                let synced_password = password
+                    .filter(|value| !value.is_empty())
+                    .map(|password| {
+                        let plaintext = if crypto::is_encrypted_secret(&password) {
+                            crypto::decrypt_secret(&db_path.0, &password)?
+                        } else if password_encrypted {
+                            crate::models::decode_password(&password)
+                        } else {
+                            password
+                        };
+
+                        crypto::encrypt_secret(&db_path.0, &plaintext)
+                    })
+                    .transpose()?;
+
+                let password_present = synced_password.is_some() as i32;
+                conn.execute(
+                    "UPDATE profiles SET password=?2, password_encrypted=?3, private_key=NULL, passphrase=NULL WHERE id=?1",
+                    params![id, synced_password, password_present],
+                )?;
             } else if auth_type == "privateKey" {
-                if let Some(private_key) = private_key.as_deref().filter(|value| !value.is_empty()) {
-                    set_profile_private_key(&id, Some(private_key))?;
-                }
-                if let Some(passphrase) = passphrase.as_deref().filter(|value| !value.is_empty()) {
-                    set_profile_passphrase(&id, Some(passphrase))?;
-                }
-                delete_profile_secrets(&id, &["password"])?;
+                let synced_private_key = private_key
+                    .filter(|value| !value.is_empty())
+                    .map(|value| {
+                        if crypto::is_encrypted_secret(&value) {
+                            Ok(value)
+                        } else {
+                            crypto::encrypt_secret(&db_path.0, &value)
+                        }
+                    })
+                    .transpose()?;
+                let synced_passphrase = passphrase
+                    .filter(|value| !value.is_empty())
+                    .map(|value| {
+                        if crypto::is_encrypted_secret(&value) {
+                            Ok(value)
+                        } else {
+                            crypto::encrypt_secret(&db_path.0, &value)
+                        }
+                    })
+                    .transpose()?;
+
+                conn.execute(
+                    "UPDATE profiles SET password=NULL, password_encrypted=0, private_key=?2, passphrase=?3 WHERE id=?1",
+                    params![id, synced_private_key, synced_passphrase],
+                )?;
             } else {
-                delete_profile_secrets(&id, &["password", "private_key", "passphrase"])?;
+                conn.execute(
+                    "UPDATE profiles SET password=NULL, password_encrypted=0, private_key=NULL, passphrase=NULL WHERE id=?1",
+                    params![id],
+                )?;
             }
         }
     }
 
     conn.execute(
-        "UPDATE profiles SET password=NULL, password_encrypted=0, private_key=NULL, passphrase=NULL",
+        "UPDATE profiles SET private_key=NULL, passphrase=NULL WHERE auth_type != 'privateKey'",
         [],
     )?;
 
