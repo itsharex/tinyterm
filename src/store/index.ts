@@ -95,6 +95,75 @@ const DEFAULT_SETTINGS: Settings = {
   bell_style: 'none',
 }
 
+type HostKeyPrompt = {
+  host: string
+  port: number
+  key_type: string
+  fingerprint: string
+  reason: 'unknown' | 'mismatch' | string
+}
+
+function extractHostKeyPrompt(error: unknown): HostKeyPrompt | null {
+  const message = String(error)
+  const marker = 'HOST_KEY_PROMPT:'
+  const markerIndex = message.indexOf(marker)
+  if (markerIndex === -1) {
+    return null
+  }
+
+  try {
+    return JSON.parse(message.slice(markerIndex + marker.length).trim()) as HostKeyPrompt
+  } catch {
+    return null
+  }
+}
+
+function buildHostKeyPromptMessage(prompt: HostKeyPrompt) {
+  const summary = `${prompt.host}:${prompt.port}\n${prompt.key_type}\n${prompt.fingerprint}`
+
+  if (prompt.reason === 'mismatch') {
+    return `检测到主机指纹变更。\n\n${summary}\n\n这可能是主机重装，也可能是中间人攻击。仅在你确认这是可信的新指纹时继续。`
+  }
+
+  return `首次连接到该主机，需要确认 SSH 指纹。\n\n${summary}\n\n确认后会保存为受信任主机。`
+}
+
+async function createSessionWithTrust(bookmarkId: string, cols: number, rows: number, password?: string | null) {
+  const connect = () => invoke<{ session_id: string }>('create_session', {
+    request: {
+      bookmark_id: bookmarkId,
+      cols,
+      rows,
+      password: password ?? null,
+    },
+  })
+
+  try {
+    return await connect()
+  } catch (error) {
+    const prompt = extractHostKeyPrompt(error)
+    if (!prompt) {
+      throw error
+    }
+
+    const confirmed = window.confirm(buildHostKeyPromptMessage(prompt))
+    if (!confirmed) {
+      throw new Error('已取消信任该 SSH 主机指纹')
+    }
+
+    await invoke('trust_host_key', {
+      request: {
+        host: prompt.host,
+        port: prompt.port,
+        key_type: prompt.key_type,
+        fingerprint: prompt.fingerprint,
+      },
+    })
+
+    return connect()
+  }
+}
+
 function normalizeSettings(settings: Settings): Settings {
   const looksLikeLegacyDefaults =
     (settings.font_size === 14 || settings.font_size === 13) &&
@@ -310,6 +379,14 @@ export const useStore = create<AppState>((set, get) => ({
       setActiveBookmarkTab(existing.id)
       // Close hosts modal
       set({ hostsModalOpen: false })
+
+      const activeSession = existing.sessions.find(s => s.id === existing.activeSessionId)
+      const hasLiveSession = activeSession?.status === 'connected' || activeSession?.status === 'connecting'
+
+      if (!hasLiveSession) {
+        await openSession(hostId, existing.id)
+      }
+
       return
     }
 
@@ -399,14 +476,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Connect to backend
     try {
-      const result = await invoke<{ session_id: string }>('create_session', {
-        request: {
-          bookmark_id: hostId,
-          cols: 80,
-          rows: 24,
-          password: null,
-        },
-      })
+      const result = await createSessionWithTrust(hostId, 80, 24, null)
 
       const localPath = await getHomeDir()
 
@@ -507,14 +577,7 @@ export const useStore = create<AppState>((set, get) => ({
     }))
 
     try {
-      const result = await invoke<{ session_id: string }>('create_session', {
-        request: {
-          bookmark_id: session.bookmarkId,
-          cols: session.cols,
-          rows: session.rows,
-          password: password ?? null,
-        },
-      })
+      const result = await createSessionWithTrust(session.bookmarkId, session.cols, session.rows, password ?? null)
       const localPath = await getHomeDir()
       set(state => ({
         bookmarkTabs: state.bookmarkTabs.map(t =>
@@ -627,14 +690,7 @@ export const useStore = create<AppState>((set, get) => ({
     }))
 
     try {
-      const result = await invoke<{ session_id: string }>('create_session', {
-        request: {
-          bookmark_id: bookmark.id,
-          cols: session.cols || 80,
-          rows: session.rows || 24,
-          password: null,
-        },
-      })
+      const result = await createSessionWithTrust(bookmark.id, session.cols || 80, session.rows || 24, null)
 
       set(state => ({
         bookmarkTabs: state.bookmarkTabs.map(t =>

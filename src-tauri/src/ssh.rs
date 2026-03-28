@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
 use ssh2::Session;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use crate::models::Bookmark;
 
-/// Build an SSH session from a bookmark
-pub fn connect_ssh(bookmark: &Bookmark, password: Option<&str>) -> Result<Session> {
+/// Establish the TCP transport and SSH handshake, but do not authenticate yet.
+pub fn connect_ssh_transport(bookmark: &Bookmark) -> Result<Session> {
     let addr = format!("{}:{}", bookmark.host, bookmark.port);
     let tcp = TcpStream::connect(&addr)
         .map_err(|e| anyhow!("TCP connect to {} failed: {}", addr, e))?;
@@ -15,14 +16,60 @@ pub fn connect_ssh(bookmark: &Bookmark, password: Option<&str>) -> Result<Sessio
     sess.set_tcp_stream(tcp);
     sess.handshake().map_err(|e| anyhow!("SSH handshake failed: {}", e))?;
 
+    Ok(sess)
+}
+
+pub fn get_host_key_fingerprint(sess: &Session) -> Result<String> {
+    let hash = sess
+        .host_key_hash(ssh2::HashType::Sha256)
+        .ok_or_else(|| anyhow!("Failed to compute host key fingerprint"))?;
+    Ok(format!("SHA256:{}", STANDARD_NO_PAD.encode(hash)))
+}
+
+pub fn get_host_key_type(sess: &Session) -> Result<String> {
+    let (_, key_type) = sess
+        .host_key()
+        .ok_or_else(|| anyhow!("Failed to read SSH host key"))?;
+
+    let label = match key_type {
+        ssh2::HostKeyType::Rsa => "ssh-rsa",
+        ssh2::HostKeyType::Dss => "ssh-dss",
+        ssh2::HostKeyType::Ecdsa256 => "ecdsa-sha2-nistp256",
+        ssh2::HostKeyType::Ecdsa384 => "ecdsa-sha2-nistp384",
+        ssh2::HostKeyType::Ecdsa521 => "ecdsa-sha2-nistp521",
+        ssh2::HostKeyType::Ed25519 => "ssh-ed25519",
+        ssh2::HostKeyType::Unknown => "unknown",
+    };
+
+    Ok(label.to_string())
+}
+
+pub fn verify_host_key(sess: &Session, expected_key_type: &str, expected_fingerprint: &str) -> Result<()> {
+    let actual_key_type = get_host_key_type(sess)?;
+    let actual_fingerprint = get_host_key_fingerprint(sess)?;
+
+    if actual_key_type != expected_key_type || actual_fingerprint != expected_fingerprint {
+        return Err(anyhow!(
+            "Host key mismatch: expected {} {}, got {} {}",
+            expected_key_type,
+            expected_fingerprint,
+            actual_key_type,
+            actual_fingerprint,
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn authenticate_ssh(sess: &Session, bookmark: &Bookmark, password: Option<&str>) -> Result<()> {
+
     // Choose auth method
     match bookmark.auth_type.as_str() {
         "privateKey" => {
             // Authenticate via private key
             let key_content = bookmark.private_key.as_deref()
                 .ok_or_else(|| anyhow!("Private key content is empty"))?;
-            let passphrase = bookmark.passphrase.as_deref()
-                .or_else(|| password);
+            let passphrase = bookmark.passphrase.as_deref();
             sess.userauth_pubkey_memory(
                 &bookmark.username,
                 None, // public key (derived from private)
@@ -35,13 +82,7 @@ pub fn connect_ssh(bookmark: &Bookmark, password: Option<&str>) -> Result<Sessio
             let pwd = password
                 .or_else(|| bookmark.password.as_deref())
                 .ok_or_else(|| anyhow!("No password provided"))?;
-            // Decode if encrypted
-            let decoded = if bookmark.password_encrypted {
-                crate::models::decode_password(pwd)
-            } else {
-                pwd.to_string()
-            };
-            sess.userauth_password(&bookmark.username, &decoded)
+            sess.userauth_password(&bookmark.username, pwd)
                 .map_err(|e| anyhow!("Password auth failed: {}", e))?;
         }
     }
@@ -49,6 +90,14 @@ pub fn connect_ssh(bookmark: &Bookmark, password: Option<&str>) -> Result<Sessio
     if !sess.authenticated() {
         return Err(anyhow!("Authentication failed"));
     }
+
+    Ok(())
+}
+
+/// Build an SSH session from a bookmark.
+pub fn connect_ssh(bookmark: &Bookmark, password: Option<&str>) -> Result<Session> {
+    let sess = connect_ssh_transport(bookmark)?;
+    authenticate_ssh(&sess, bookmark, password)?;
 
     Ok(sess)
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Plus, Pencil, Trash2, KeyRound, Lock, ShieldCheck, AlertCircle } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, KeyRound, Lock, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useStore } from '../store'
 import type { Profile } from '../types'
 import './CredentialsModal.css'
@@ -147,6 +147,8 @@ function CredentialForm({
   onSave: (data: CredentialFormData) => Promise<void>
   onCancel: () => void
 }) {
+  const [showPassword, setShowPassword] = useState(false)
+  const [showPassphrase, setShowPassphrase] = useState(false)
   const [form, setForm] = useState<CredentialFormData>({
     title: credential?.title ?? '',
     username: credential?.username ?? '',
@@ -190,6 +192,9 @@ function CredentialForm({
               placeholder="例如: Production Root Key"
               value={form.title}
               onChange={e => update('title', e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               autoFocus
             />
           </div>
@@ -202,6 +207,9 @@ function CredentialForm({
               placeholder="root"
               value={form.username}
               onChange={e => update('username', e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
           </div>
 
@@ -232,13 +240,26 @@ function CredentialForm({
           {form.auth_type === 'password' && (
             <div className="cf-field full">
               <label className="cf-label">密码</label>
-              <input
-                className="form-input"
-                type="password"
-                placeholder={credential ? '留空则保持不变' : '登录密码'}
-                value={form.password ?? ''}
-                onChange={e => update('password', e.target.value)}
-              />
+              <div className="cf-secret-field">
+                <input
+                  className="form-input cf-secret-input"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={credential ? '留空则保持原密码' : '登录密码'}
+                  value={form.password ?? ''}
+                  onChange={e => update('password', e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="cf-secret-toggle"
+                  onClick={() => setShowPassword(value => !value)}
+                  title={showPassword ? '隐藏密码' : '显示密码'}
+                >
+                  {showPassword ? <EyeOff size={14} strokeWidth={1.9} /> : <Eye size={14} strokeWidth={1.9} />}
+                </button>
+              </div>
             </div>
           )}
 
@@ -250,20 +271,36 @@ function CredentialForm({
                 <textarea
                   className="form-input cf-textarea"
                   rows={6}
-                  placeholder={'-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----'}
+                  placeholder={credential ? '留空则保持原私钥' : '-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----'}
                   value={form.private_key ?? ''}
                   onChange={e => update('private_key', e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
               <div className="cf-field full">
                 <label className="cf-label">私钥密码（可选）</label>
-                <input
-                  className="form-input"
-                  type="password"
-                  placeholder="私钥保护密码"
-                  value={form.passphrase ?? ''}
-                  onChange={e => update('passphrase', e.target.value)}
-                />
+                <div className="cf-secret-field">
+                  <input
+                    className="form-input cf-secret-input"
+                    type={showPassphrase ? 'text' : 'password'}
+                    placeholder={credential ? '留空则保持原私钥密码' : '私钥保护密码'}
+                    value={form.passphrase ?? ''}
+                    onChange={e => update('passphrase', e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="cf-secret-toggle"
+                    onClick={() => setShowPassphrase(value => !value)}
+                    title={showPassphrase ? '隐藏私钥密码' : '显示私钥密码'}
+                  >
+                    {showPassphrase ? <EyeOff size={14} strokeWidth={1.9} /> : <Eye size={14} strokeWidth={1.9} />}
+                  </button>
+                </div>
               </div>
             </>
           )}

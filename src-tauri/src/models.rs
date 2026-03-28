@@ -190,6 +190,25 @@ pub struct RemoteDeleteStatus {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustedHostKey {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub fingerprint: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostKeyVerificationPrompt {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub fingerprint: String,
+    pub reason: String,
+}
+
 // Password encode/decode (simple obfuscation matching electerm)
 pub fn encode_password(s: &str) -> String {
     s.chars()

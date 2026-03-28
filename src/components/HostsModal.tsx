@@ -133,6 +133,9 @@ export function HostsModal() {
               placeholder="搜索主机名 / IP..."
               value={filter}
               onChange={e => setFilter(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
           </div>
           <button
@@ -279,7 +282,7 @@ function HostForm({
           <div className="hf-field full">
             <label className="hf-label">名称（可选）</label>
             <input className="form-input" placeholder="My Production Server"
-              value={form.title} onChange={e => set('title', e.target.value)} autoFocus />
+              value={form.title} onChange={e => set('title', e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus />
           </div>
 
           {/* Host + Port */}
@@ -287,7 +290,7 @@ function HostForm({
             <div className="hf-field" style={{ flex: 3 }}>
               <label className="hf-label">主机地址 *</label>
               <input className="form-input" placeholder="192.168.1.1 / example.com"
-                value={form.host} onChange={e => set('host', e.target.value)} />
+                value={form.host} onChange={e => set('host', e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
             </div>
             <div className="hf-field" style={{ flex: 1 }}>
               <label className="hf-label">端口</label>
@@ -338,7 +341,7 @@ function HostForm({
             <label className="hf-label">远程初始目录（可选）</label>
             <input className="form-input" placeholder="/home/user"
               value={form.start_directory_remote}
-              onChange={e => set('start_directory_remote', e.target.value)} />
+              onChange={e => set('start_directory_remote', e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           </div>
 
           {/* Color + Description */}
@@ -351,7 +354,7 @@ function HostForm({
             <div className="hf-field" style={{ flex: 3 }}>
               <label className="hf-label">备注</label>
               <input className="form-input" placeholder="可选"
-                value={form.description} onChange={e => set('description', e.target.value)} />
+                value={form.description} onChange={e => set('description', e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
             </div>
           </div>
 

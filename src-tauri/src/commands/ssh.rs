@@ -6,6 +6,11 @@ use std::sync::{mpsc, Arc};
 use tauri::State;
 use uuid::Uuid;
 
+use crate::models::{HostKeyVerificationPrompt, TrustedHostKey};
+use crate::secrets::{
+    get_bookmark_passphrase, get_bookmark_password, get_bookmark_private_key,
+    get_profile_passphrase, get_profile_password, get_profile_private_key,
+};
 use crate::session::{SessionManager, SshSession};
 use crate::ssh;
 use crate::storage::{self, DbPath};
@@ -23,6 +28,141 @@ pub struct CreateSessionResponse {
     pub session_id: String,
 }
 
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
+fn host_key_prompt_error(prompt: &HostKeyVerificationPrompt) -> String {
+    format!(
+        "HOST_KEY_PROMPT:{}",
+        serde_json::to_string(prompt).unwrap_or_else(|_| "{}".to_string())
+    )
+}
+
+fn resolve_password_secret(
+    keychain_value: Option<String>,
+    db_value: Option<String>,
+    password_encrypted: bool,
+) -> Option<String> {
+    keychain_value.or_else(|| {
+        db_value.and_then(|value| {
+            if value.is_empty() {
+                None
+            } else if password_encrypted {
+                Some(crate::models::decode_password(&value))
+            } else {
+                Some(value)
+            }
+        })
+    })
+}
+
+fn resolve_plain_secret(keychain_value: Option<String>, db_value: Option<String>) -> Option<String> {
+    keychain_value.or_else(|| db_value.filter(|value| !value.is_empty()))
+}
+
+fn hydrate_bookmark_auth(bookmark: &mut crate::models::Bookmark) -> Result<(), String> {
+    match bookmark.auth_type.as_str() {
+        "password" => {
+            let keychain_password = get_bookmark_password(&bookmark.id).map_err(|e| e.to_string())?;
+            bookmark.password = resolve_password_secret(
+                keychain_password,
+                bookmark.password.clone(),
+                bookmark.password_encrypted,
+            );
+            bookmark.password_encrypted = false;
+            bookmark.private_key = None;
+            bookmark.passphrase = None;
+        }
+        "privateKey" => {
+            let keychain_private_key = get_bookmark_private_key(&bookmark.id).map_err(|e| e.to_string())?;
+            let keychain_passphrase = get_bookmark_passphrase(&bookmark.id).map_err(|e| e.to_string())?;
+            bookmark.private_key = resolve_plain_secret(keychain_private_key, bookmark.private_key.clone());
+            bookmark.passphrase = resolve_plain_secret(keychain_passphrase, bookmark.passphrase.clone());
+            bookmark.password = None;
+            bookmark.password_encrypted = false;
+        }
+        _ => {
+            bookmark.password = None;
+            bookmark.password_encrypted = false;
+            bookmark.private_key = None;
+            bookmark.passphrase = None;
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_bookmark_for_connection(db_path: &DbPath, bookmark_id: &str) -> Result<(crate::models::Bookmark, Option<String>), String> {
+    let bookmarks = storage::list_bookmarks(db_path).map_err(|e| e.to_string())?;
+    let mut bookmark = bookmarks
+        .iter()
+        .find(|b| b.id == bookmark_id)
+        .cloned()
+        .ok_or_else(|| "Bookmark not found".to_string())?;
+
+    if bookmark.auth_type == "profile" {
+        let profile_id = bookmark
+            .profile_id
+            .clone()
+            .ok_or_else(|| "Host has auth_type=profile but no profile_id set".to_string())?;
+        let profiles = storage::list_profiles(db_path).map_err(|e| e.to_string())?;
+        let profile = profiles
+            .iter()
+            .find(|p| p.id == profile_id)
+            .ok_or_else(|| format!("Credential '{}' not found", profile_id))?;
+
+        let profile_password = get_profile_password(&profile_id).map_err(|e| e.to_string())?;
+        let profile_private_key = get_profile_private_key(&profile_id).map_err(|e| e.to_string())?;
+        let profile_passphrase = get_profile_passphrase(&profile_id).map_err(|e| e.to_string())?;
+
+        bookmark.username = profile.username.clone();
+        bookmark.auth_type = profile.auth_type.clone();
+        bookmark.password = resolve_password_secret(
+            profile_password,
+            profile.password.clone(),
+            profile.password_encrypted,
+        );
+        bookmark.password_encrypted = false;
+        bookmark.private_key = resolve_plain_secret(profile_private_key, profile.private_key.clone());
+        bookmark.passphrase = resolve_plain_secret(profile_passphrase, profile.passphrase.clone());
+        Ok((bookmark, Some(profile_id)))
+    } else {
+        hydrate_bookmark_auth(&mut bookmark)?;
+        Ok((bookmark, None))
+    }
+}
+
+fn ensure_host_key_trusted(db_path: &DbPath, bookmark: &crate::models::Bookmark, sess: &ssh2::Session) -> Result<(String, String), String> {
+    let fingerprint = ssh::get_host_key_fingerprint(sess).map_err(|e| e.to_string())?;
+    let key_type = ssh::get_host_key_type(sess).map_err(|e| e.to_string())?;
+    let trusted = storage::get_trusted_host_key(db_path, &bookmark.host, bookmark.port)
+        .map_err(|e| e.to_string())?;
+
+    match trusted {
+        Some(record) if record.fingerprint == fingerprint && record.key_type == key_type => {
+            Ok((fingerprint, key_type))
+        }
+        Some(_) => Err(host_key_prompt_error(&HostKeyVerificationPrompt {
+            host: bookmark.host.clone(),
+            port: bookmark.port,
+            key_type,
+            fingerprint,
+            reason: "mismatch".to_string(),
+        })),
+        None => Err(host_key_prompt_error(&HostKeyVerificationPrompt {
+            host: bookmark.host.clone(),
+            port: bookmark.port,
+            key_type,
+            fingerprint,
+            reason: "unknown".to_string(),
+        })),
+    }
+}
+
 /// Establish the SSH connection and open the PTY shell channel.
 ///
 /// Does NOT start any background reader thread — call `subscribe_session`
@@ -35,34 +175,28 @@ pub fn create_session(
     session_manager: State<SessionManager>,
     request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
-    let bookmarks = storage::list_bookmarks(&db_path).map_err(|e| e.to_string())?;
-    let mut bookmark = bookmarks
-        .iter()
-        .find(|b| b.id == request.bookmark_id)
-        .cloned()
-        .ok_or_else(|| "Bookmark not found".to_string())?;
+    let (bookmark, linked_profile_id) = resolve_bookmark_for_connection(&db_path, &request.bookmark_id)?;
 
-    if bookmark.auth_type == "profile" {
-        let profile_id = bookmark
-            .profile_id
-            .clone()
-            .ok_or_else(|| "Host has auth_type=profile but no profile_id set".to_string())?;
-        let profiles = storage::list_profiles(&db_path).map_err(|e| e.to_string())?;
-        let profile = profiles
-            .iter()
-            .find(|p| p.id == profile_id)
-            .ok_or_else(|| format!("Credential '{}' not found", profile_id))?;
-
-        bookmark.username = profile.username.clone();
-        bookmark.auth_type = profile.auth_type.clone();
-        bookmark.password = profile.password.clone();
-        bookmark.password_encrypted = profile.password_encrypted;
-        bookmark.private_key = profile.private_key.clone();
-        bookmark.passphrase = profile.passphrase.clone();
-    }
+    eprintln!(
+        "[tinyterm auth diagnostics] bookmark_id={} host={} username={} linked_profile_id={:?} auth_type={} request_password_present={} stored_password_present={} stored_password_len={} private_key_present={} private_key_len={} passphrase_present={} passphrase_len={}",
+        request.bookmark_id,
+        bookmark.host,
+        bookmark.username,
+        linked_profile_id,
+        bookmark.auth_type,
+        request.password.as_deref().is_some_and(|value| !value.is_empty()),
+        bookmark.password.as_deref().is_some_and(|value| !value.is_empty()),
+        bookmark.password.as_deref().map(|value| value.chars().count()).unwrap_or(0),
+        bookmark.private_key.as_deref().is_some_and(|value| !value.is_empty()),
+        bookmark.private_key.as_deref().map(|value| value.chars().count()).unwrap_or(0),
+        bookmark.passphrase.as_deref().is_some_and(|value| !value.is_empty()),
+        bookmark.passphrase.as_deref().map(|value| value.chars().count()).unwrap_or(0),
+    );
 
     let password = request.password.as_deref();
-    let sess = ssh::connect_ssh(&bookmark, password).map_err(|e| e.to_string())?;
+    let sess = ssh::connect_ssh_transport(&bookmark).map_err(|e| e.to_string())?;
+    let (trusted_host_fingerprint, trusted_host_key_type) = ensure_host_key_trusted(&db_path, &bookmark, &sess)?;
+    ssh::authenticate_ssh(&sess, &bookmark, password).map_err(|e| e.to_string())?;
     let channel = ssh::open_shell_channel(&sess, &bookmark.term, request.cols, request.rows)
         .map_err(|e| e.to_string())?;
 
@@ -108,6 +242,8 @@ pub fn create_session(
         sftp_session: Arc::new(Mutex::new(None)),
         resolved_bookmark: bookmark,
         password_override: request.password,
+        trusted_host_fingerprint,
+        trusted_host_key_type,
         stop_reader: Arc::new(AtomicBool::new(false)),
         write_tx,
     };
@@ -118,6 +254,27 @@ pub fn create_session(
         .insert(session_id.clone(), ssh_session);
 
     Ok(CreateSessionResponse { session_id })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustHostKeyRequest {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub fingerprint: String,
+}
+
+#[tauri::command]
+pub fn trust_host_key(db_path: State<DbPath>, request: TrustHostKeyRequest) -> Result<(), String> {
+    let now = now_unix();
+    storage::upsert_trusted_host_key(&db_path, &TrustedHostKey {
+        host: request.host,
+        port: request.port,
+        key_type: request.key_type,
+        fingerprint: request.fingerprint,
+        created_at: now,
+        updated_at: now,
+    }).map_err(|e| e.to_string())
 }
 
 /// Start the background SSH reader and wire its output to a Tauri Channel.

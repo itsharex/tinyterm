@@ -1,5 +1,6 @@
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
@@ -17,7 +18,7 @@ use crate::ssh;
 fn get_sftp_info(
     session_manager: &State<SessionManager>,
     session_id: &str,
-) -> Result<(Arc<parking_lot::Mutex<Option<ssh2::Session>>>, Bookmark, Option<String>), String> {
+) -> Result<(Arc<parking_lot::Mutex<Option<ssh2::Session>>>, Bookmark, Option<String>, String, String), String> {
     let sessions = session_manager.sessions.lock();
     let s = sessions
         .get(session_id)
@@ -26,6 +27,8 @@ fn get_sftp_info(
         Arc::clone(&s.sftp_session),
         s.resolved_bookmark.clone(),
         s.password_override.clone(),
+        s.trusted_host_fingerprint.clone(),
+        s.trusted_host_key_type.clone(),
     ))
 }
 
@@ -38,10 +41,16 @@ fn ensure_sftp_session<'a>(
     guard: &'a mut Option<ssh2::Session>,
     bookmark: &Bookmark,
     password: Option<&str>,
+    expected_host_fingerprint: &str,
+    expected_host_key_type: &str,
 ) -> Result<&'a ssh2::Session, String> {
     if guard.is_none() {
-        let sess = ssh::connect_ssh(bookmark, password)
+        let sess = ssh::connect_ssh_transport(bookmark)
             .map_err(|e| format!("SFTP connection failed: {}", e))?;
+        ssh::verify_host_key(&sess, expected_host_key_type, expected_host_fingerprint)
+            .map_err(|e| format!("SFTP host key verification failed: {}", e))?;
+        ssh::authenticate_ssh(&sess, bookmark, password)
+            .map_err(|e| format!("SFTP authentication failed: {}", e))?;
         // Keep the SFTP session in blocking mode permanently — it never
         // shares the PTY channel so there is no need to toggle.
         sess.set_blocking(true);
@@ -62,10 +71,16 @@ fn with_sftp<T>(
     session_id: &str,
     body: impl FnOnce(&ssh2::Sftp) -> Result<T, String>,
 ) -> Result<T, String> {
-    let (sftp_arc, bookmark, password) = get_sftp_info(session_manager, session_id)?;
+    let (sftp_arc, bookmark, password, trusted_host_fingerprint, trusted_host_key_type) = get_sftp_info(session_manager, session_id)?;
     let mut guard = sftp_arc.lock();
 
-    let sess = ensure_sftp_session(&mut guard, &bookmark, password.as_deref())?;
+    let sess = ensure_sftp_session(
+        &mut guard,
+        &bookmark,
+        password.as_deref(),
+        &trusted_host_fingerprint,
+        &trusted_host_key_type,
+    )?;
 
     let sftp = sess.sftp().map_err(|e| {
         // If the SFTP subsystem can't be opened the underlying connection may
@@ -91,6 +106,95 @@ fn with_sftp<T>(
     }
 
     result
+}
+
+fn is_filesystem_root(path: &Path) -> bool {
+    let mut components = path.components();
+    match (components.next(), components.next(), components.next()) {
+        (Some(Component::RootDir), None, None) => true,
+        (Some(Component::Prefix(_)), Some(Component::RootDir), None) => true,
+        _ => false,
+    }
+}
+
+fn guard_local_delete_target(path: &Path) -> Result<(), String> {
+    if is_filesystem_root(path) {
+        return Err("Refusing to delete filesystem root".to_string());
+    }
+
+    if let Some(home_dir) = dirs::home_dir() {
+        let home_dir = fs::canonicalize(home_dir).map_err(|e| e.to_string())?;
+        if path == home_dir {
+            return Err("Refusing to delete local home directory".to_string());
+        }
+    }
+
+    Ok(())
+}
+
+fn normalize_remote_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut normalized = trimmed.to_string();
+    while normalized.len() > 1 && normalized.ends_with('/') {
+        normalized.pop();
+    }
+    normalized
+}
+
+fn get_remote_home_dir(ssh_session: &Arc<parking_lot::Mutex<ssh2::Session>>) -> Result<String, String> {
+    let sess = ssh_session.lock();
+    sess.set_blocking(true);
+    sess.set_timeout(5000);
+
+    let result = (|| -> Result<String, String> {
+        let mut channel = sess.channel_session().map_err(|e| format!("channel_session: {}", e))?;
+        channel.exec("printf '%s' \"$HOME\"").map_err(|e| format!("exec: {}", e))?;
+
+        let mut output = String::new();
+        channel.read_to_string(&mut output).map_err(|e| format!("read: {}", e))?;
+        channel.wait_close().map_err(|e| format!("wait_close: {}", e))?;
+
+        Ok(normalize_remote_path(&output))
+    })();
+
+    sess.set_timeout(0);
+    sess.set_blocking(false);
+
+    result
+}
+
+fn guard_remote_delete_target(
+    session_manager: &State<SessionManager>,
+    session_id: &str,
+    path: &str,
+) -> Result<String, String> {
+    let normalized_input = normalize_remote_path(path);
+    if normalized_input.is_empty() || normalized_input == "/" {
+        return Err("Refusing to delete remote root directory".to_string());
+    }
+
+    let canonical_path = with_sftp(session_manager, session_id, |sftp| {
+        sftp.realpath(Path::new(&normalized_input))
+            .map(|pathbuf| normalize_remote_path(&pathbuf.to_string_lossy()))
+            .map_err(|_| normalized_input.clone())
+    })
+    .unwrap_or_else(|_| normalized_input.clone());
+
+    if canonical_path == "/" {
+        return Err("Refusing to delete remote root directory".to_string());
+    }
+
+    let ssh_session = get_ssh_session(session_manager, session_id)?;
+    let home_dir = get_remote_home_dir(&ssh_session)?;
+    if !home_dir.is_empty() && canonical_path == home_dir {
+        return Err("Refusing to delete remote home directory".to_string());
+    }
+
+    Ok(canonical_path)
 }
 
 // ── Remote directory listing ────────────────────────────────────────────────
@@ -290,13 +394,19 @@ pub fn upload_file(
     );
 
     thread::spawn(move || {
-        let (sftp_arc, bookmark, password) = sftp_info;
+        let (sftp_arc, bookmark, password, trusted_host_fingerprint, trusted_host_key_type) = sftp_info;
         let result = (|| -> Result<(), String> {
             let local_file = File::open(&local_path).map_err(|e| e.to_string())?;
             let mut local_reader = BufReader::new(local_file);
 
             let mut guard = sftp_arc.lock();
-            let sess = ensure_sftp_session(&mut guard, &bookmark, password.as_deref())?;
+            let sess = ensure_sftp_session(
+                &mut guard,
+                &bookmark,
+                password.as_deref(),
+                &trusted_host_fingerprint,
+                &trusted_host_key_type,
+            )?;
             let sftp = sess.sftp().map_err(|e| {
                 *guard = None;
                 format!("SFTP init failed: {}", e)
@@ -465,9 +575,15 @@ pub fn download_file(
 
     thread::spawn(move || {
         let result = (|| -> Result<u64, String> {
-            let (sftp_arc, bookmark, password) = sftp_info;
+            let (sftp_arc, bookmark, password, trusted_host_fingerprint, trusted_host_key_type) = sftp_info;
             let mut guard = sftp_arc.lock();
-            let sess = ensure_sftp_session(&mut guard, &bookmark, password.as_deref())?;
+            let sess = ensure_sftp_session(
+                &mut guard,
+                &bookmark,
+                password.as_deref(),
+                &trusted_host_fingerprint,
+                &trusted_host_key_type,
+            )?;
 
             // Single scp_recv — get the stat and the data channel in one call.
             let (mut remote_file, stat) = sess
@@ -751,10 +867,11 @@ pub fn delete_remote(
     path: String,
     is_dir: bool,
 ) -> Result<(), String> {
+    let guarded_path = guard_remote_delete_target(&session_manager, &session_id, &path)?;
     let ssh_session = get_ssh_session(&session_manager, &session_id)?;
-    remove_remote_path_fast(&ssh_session, &path, is_dir).or_else(|_| {
+    remove_remote_path_fast(&ssh_session, &guarded_path, is_dir).or_else(|_| {
         with_sftp(&session_manager, &session_id, |sftp| {
-            remove_remote_path(&sftp, Path::new(&path), is_dir)
+            remove_remote_path(&sftp, Path::new(&guarded_path), is_dir)
         })
     })
 }
@@ -767,22 +884,29 @@ pub fn delete_remote_async(
     is_dir: bool,
     app: AppHandle,
 ) -> Result<(), String> {
+    let guarded_path = guard_remote_delete_target(&session_manager, &session_id, &path)?;
     let sftp_info = get_sftp_info(&session_manager, &session_id)?;
     let ssh_session = get_ssh_session(&session_manager, &session_id)?;
     let target_path = path.clone();
 
     thread::spawn(move || {
         let result = (|| -> Result<(), String> {
-            remove_remote_path_fast(&ssh_session, &path, is_dir).or_else(|_| {
-                let (sftp_arc, bookmark, password) = sftp_info;
+            remove_remote_path_fast(&ssh_session, &guarded_path, is_dir).or_else(|_| {
+                let (sftp_arc, bookmark, password, trusted_host_fingerprint, trusted_host_key_type) = sftp_info;
                 let mut guard = sftp_arc.lock();
-                let sess = ensure_sftp_session(&mut guard, &bookmark, password.as_deref())?;
+                let sess = ensure_sftp_session(
+                    &mut guard,
+                    &bookmark,
+                    password.as_deref(),
+                    &trusted_host_fingerprint,
+                    &trusted_host_key_type,
+                )?;
                 let sftp = sess.sftp().map_err(|e| {
                     *guard = None;
                     format!("SFTP init failed: {}", e)
                 })?;
 
-                remove_remote_path(&sftp, Path::new(&path), is_dir)
+                remove_remote_path(&sftp, Path::new(&guarded_path), is_dir)
             })
         })();
 
@@ -833,11 +957,21 @@ pub fn rename_remote(
 // ── Local file/directory operations ─────────────────────────────────────────
 
 #[tauri::command]
-pub fn delete_local(path: String, is_dir: bool) -> Result<(), String> {
-    if is_dir {
-        fs::remove_dir_all(&path).map_err(|e| e.to_string())
+pub fn delete_local(path: String, _is_dir: bool) -> Result<(), String> {
+    let raw_path = PathBuf::from(&path);
+    let metadata = fs::symlink_metadata(&raw_path).map_err(|e| e.to_string())?;
+
+    if metadata.file_type().is_symlink() {
+        return fs::remove_file(&raw_path).map_err(|e| e.to_string());
+    }
+
+    let resolved_path = fs::canonicalize(&raw_path).map_err(|e| e.to_string())?;
+    guard_local_delete_target(&resolved_path)?;
+
+    if metadata.is_dir() {
+        fs::remove_dir_all(&resolved_path).map_err(|e| e.to_string())
     } else {
-        fs::remove_file(&path).map_err(|e| e.to_string())
+        fs::remove_file(&resolved_path).map_err(|e| e.to_string())
     }
 }
 

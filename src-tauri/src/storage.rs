@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::path::PathBuf;
-use crate::models::{Bookmark, BookmarkGroup, Profile, Settings};
+use crate::models::{Bookmark, BookmarkGroup, Profile, Settings, TrustedHostKey};
 
 pub struct DbPath(pub PathBuf);
 
@@ -64,6 +64,15 @@ pub fn init_db(path: &PathBuf) -> Result<()> {
             cursor_style TEXT NOT NULL DEFAULT 'block',
             cursor_blink INTEGER NOT NULL DEFAULT 1,
             bell_style TEXT NOT NULL DEFAULT 'none'
+        );
+        CREATE TABLE IF NOT EXISTS trusted_host_keys (
+            host TEXT NOT NULL,
+            port INTEGER NOT NULL,
+            key_type TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (host, port)
         );
         INSERT OR IGNORE INTO settings (id) VALUES (1);
     ")?;
@@ -147,6 +156,149 @@ pub fn update_bookmark(db_path: &DbPath, bookmark: &Bookmark) -> Result<()> {
 pub fn delete_bookmark(db_path: &DbPath, id: &str) -> Result<()> {
     let conn = get_conn(db_path)?;
     conn.execute("DELETE FROM bookmarks WHERE id=?1", params![id])?;
+    Ok(())
+}
+
+pub fn upsert_trusted_host_key(db_path: &DbPath, trusted_host_key: &TrustedHostKey) -> Result<()> {
+    let conn = get_conn(db_path)?;
+    conn.execute(
+        "INSERT INTO trusted_host_keys (host, port, key_type, fingerprint, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(host, port) DO UPDATE SET key_type=excluded.key_type, fingerprint=excluded.fingerprint, updated_at=excluded.updated_at",
+        params![
+            trusted_host_key.host,
+            trusted_host_key.port,
+            trusted_host_key.key_type,
+            trusted_host_key.fingerprint,
+            trusted_host_key.created_at,
+            trusted_host_key.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_trusted_host_key(db_path: &DbPath, host: &str, port: u16) -> Result<Option<TrustedHostKey>> {
+    let conn = get_conn(db_path)?;
+    let result = conn.query_row(
+        "SELECT host, port, key_type, fingerprint, created_at, updated_at FROM trusted_host_keys WHERE host=?1 AND port=?2",
+        params![host, port],
+        |row| {
+            Ok(TrustedHostKey {
+                host: row.get(0)?,
+                port: row.get(1)?,
+                key_type: row.get(2)?,
+                fingerprint: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        },
+    );
+
+    match result {
+        Ok(record) => Ok(Some(record)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub fn migrate_secrets_to_keychain(db_path: &DbPath) -> Result<()> {
+    use crate::secrets::{
+        delete_bookmark_secrets, delete_profile_secrets, set_bookmark_passphrase,
+        set_bookmark_password, set_bookmark_private_key, set_profile_passphrase,
+        set_profile_password, set_profile_private_key,
+    };
+
+    let conn = get_conn(db_path)?;
+
+    {
+        let mut stmt = conn.prepare(
+            "SELECT id, auth_type, password, password_encrypted, private_key, passphrase FROM bookmarks",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, i32>(3)? != 0,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })?;
+
+        for row in rows {
+            let (id, auth_type, password, password_encrypted, private_key, passphrase) = row?;
+
+            if auth_type != "password" && auth_type != "privateKey" && auth_type != "profile" {
+                continue;
+            }
+
+            if auth_type == "password" {
+                if let Some(password) = password.filter(|value| !value.is_empty()) {
+                    let decoded = if password_encrypted { crate::models::decode_password(&password) } else { password };
+                    set_bookmark_password(&id, Some(&decoded))?;
+                }
+                delete_bookmark_secrets(&id, &["private_key", "passphrase"])?;
+            } else if auth_type == "privateKey" {
+                if let Some(private_key) = private_key.as_deref().filter(|value| !value.is_empty()) {
+                    set_bookmark_private_key(&id, Some(private_key))?;
+                }
+                if let Some(passphrase) = passphrase.as_deref().filter(|value| !value.is_empty()) {
+                    set_bookmark_passphrase(&id, Some(passphrase))?;
+                }
+                delete_bookmark_secrets(&id, &["password"])?;
+            } else {
+                delete_bookmark_secrets(&id, &["password", "private_key", "passphrase"])?;
+            }
+        }
+    }
+
+    conn.execute(
+        "UPDATE bookmarks SET password=NULL, password_encrypted=0, private_key=NULL, passphrase=NULL",
+        [],
+    )?;
+
+    {
+        let mut stmt = conn.prepare(
+            "SELECT id, auth_type, password, password_encrypted, private_key, passphrase FROM profiles",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, i32>(3)? != 0,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })?;
+
+        for row in rows {
+            let (id, auth_type, password, password_encrypted, private_key, passphrase) = row?;
+
+            if auth_type == "password" {
+                if let Some(password) = password.filter(|value| !value.is_empty()) {
+                    let decoded = if password_encrypted { crate::models::decode_password(&password) } else { password };
+                    set_profile_password(&id, Some(&decoded))?;
+                }
+                delete_profile_secrets(&id, &["private_key", "passphrase"])?;
+            } else if auth_type == "privateKey" {
+                if let Some(private_key) = private_key.as_deref().filter(|value| !value.is_empty()) {
+                    set_profile_private_key(&id, Some(private_key))?;
+                }
+                if let Some(passphrase) = passphrase.as_deref().filter(|value| !value.is_empty()) {
+                    set_profile_passphrase(&id, Some(passphrase))?;
+                }
+                delete_profile_secrets(&id, &["password"])?;
+            } else {
+                delete_profile_secrets(&id, &["password", "private_key", "passphrase"])?;
+            }
+        }
+    }
+
+    conn.execute(
+        "UPDATE profiles SET password=NULL, password_encrypted=0, private_key=NULL, passphrase=NULL",
+        [],
+    )?;
+
     Ok(())
 }
 

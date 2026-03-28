@@ -199,7 +199,9 @@ export default function App() {
               /* Empty state — no host tabs at all */
               <div className="empty-state glass-panel">
                 <div className="empty-state-content">
-                  <div className="empty-icon" />
+                  <div className="empty-icon">
+                    <img src={logoSrc} alt="TinyTerm logo" />
+                  </div>
                   <h2>TinyTerm</h2>
                   <p>
                     点击左侧 <strong>添加主机</strong> 或顶部 <strong>主机</strong> 开始连接

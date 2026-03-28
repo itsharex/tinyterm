@@ -118,7 +118,7 @@ interface PanelProps {
 }
 
 function Panel({
-  side: _side, title, icon, files, currentPath, loading, error,
+  side, title, icon, files, currentPath, loading, error,
   selectedPaths, onSelectionChange, onNavigate, onGoUp, onToggleHidden, showHidden, disabled = false, busyLabel, onRefresh, onNewFolder, onContextMenu,
 }: PanelProps) {
   const [editingPath, setEditingPath] = useState(false)
@@ -135,7 +135,7 @@ function Panel({
   }
 
   return (
-    <div className={`fm-panel${disabled ? ' fm-panel--disabled' : ''}`}>
+    <div className={`fm-panel fm-panel--${side}${disabled ? ' fm-panel--disabled' : ''}`}>
       {/* Panel header */}
       <div className="fm-panel-header">
         <span className="fm-panel-icon">{icon}</span>

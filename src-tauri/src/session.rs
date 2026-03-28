@@ -22,6 +22,10 @@ pub struct SshSession {
     pub resolved_bookmark: Bookmark,
     /// Password override supplied at connection time (if any).
     pub password_override: Option<String>,
+    /// Verified host key fingerprint accepted for this live session.
+    pub trusted_host_fingerprint: String,
+    /// SSH host key algorithm bound to the trusted fingerprint.
+    pub trusted_host_key_type: String,
     /// Set to `true` to signal the background reader thread to exit cleanly.
     pub stop_reader: Arc<AtomicBool>,
     /// Sender half of the dedicated writer thread's input queue.

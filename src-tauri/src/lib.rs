@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod models;
+pub mod secrets;
 pub mod session;
 pub mod ssh;
 pub mod storage;
@@ -18,6 +19,8 @@ pub fn run() {
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
             let db_path = app_dir.join("tinyterm.db");
             storage::init_db(&db_path).expect("failed to initialize database");
+            storage::migrate_secrets_to_keychain(&storage::DbPath(db_path.clone()))
+                .expect("failed to migrate secrets to keychain");
             app.manage(storage::DbPath(db_path));
             app.manage(session::SessionManager::new());
             Ok(())
@@ -48,6 +51,7 @@ pub fn run() {
             commands::ssh::subscribe_session,
             commands::ssh::get_remote_cwd,
             commands::ssh::execute_remote_command,
+            commands::ssh::trust_host_key,
             // SFTP commands
             commands::sftp::list_remote_dir,
             commands::sftp::list_local_dir,
