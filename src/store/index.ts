@@ -377,8 +377,6 @@ export const useStore = create<AppState>((set, get) => ({
     const existing = bookmarkTabs.find(t => t.hostId === hostId || t.bookmarkId === hostId)
     if (existing) {
       setActiveBookmarkTab(existing.id)
-      // Close hosts modal
-      set({ hostsModalOpen: false })
 
       const activeSession = existing.sessions.find(s => s.id === existing.activeSessionId)
       const hasLiveSession = activeSession?.status === 'connected' || activeSession?.status === 'connecting'
@@ -387,6 +385,7 @@ export const useStore = create<AppState>((set, get) => ({
         await openSession(hostId, existing.id)
       }
 
+      set({ hostsModalOpen: false })
       return
     }
 
@@ -396,11 +395,10 @@ export const useStore = create<AppState>((set, get) => ({
     const tabTitle = host.title || host.host
     const tab = addBookmarkTab(tabTitle, hostId)
 
-    // Close modal before connecting
-    set({ hostsModalOpen: false })
-
     // Open the first session in this new tab
     await openSession(hostId, tab.id)
+
+    set({ hostsModalOpen: false })
   },
 
   addBookmarkTab: (title, hostId) => {

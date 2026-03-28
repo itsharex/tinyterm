@@ -115,11 +115,12 @@ interface PanelProps {
   onRefresh: () => void
   onNewFolder: () => void
   onContextMenu: (e: React.MouseEvent, file: FileInfo) => void
+  onNavigateStart?: () => void
 }
 
 function Panel({
   side, title, icon, files, currentPath, loading, error,
-  selectedPaths, onSelectionChange, onNavigate, onGoUp, onToggleHidden, showHidden, disabled = false, busyLabel, onRefresh, onNewFolder, onContextMenu,
+  selectedPaths, onSelectionChange, onNavigate, onGoUp, onToggleHidden, showHidden, disabled = false, busyLabel, onRefresh, onNewFolder, onContextMenu, onNavigateStart,
 }: PanelProps) {
   const [editingPath, setEditingPath] = useState(false)
   const [pathInput, setPathInput] = useState(currentPath)
@@ -129,9 +130,14 @@ function Panel({
     if (!editingPath) setPathInput(currentPath)
   }, [currentPath, editingPath])
 
-  const commitPath = () => {
+  const commitPath = async () => {
     setEditingPath(false)
-    if (pathInput !== currentPath) onNavigate(pathInput)
+    if (pathInput !== currentPath) {
+      onNavigateStart?.()
+      // 强制先渲染 loading 状态
+      await new Promise(resolve => setTimeout(resolve, 50))
+      onNavigate(pathInput)
+    }
   }
 
   return (
@@ -215,9 +221,14 @@ function Panel({
                   else if (e.metaKey || e.ctrlKey) onSelectionChange(file, 'toggle')
                   else onSelectionChange(file, 'single')
                 }}
-                onDoubleClick={() => {
+                onDoubleClick={async () => {
                   if (disabled) return
-                  file.is_dir && onNavigate(file.path)
+                  if (file.is_dir) {
+                    onNavigateStart?.()
+                    // 强制先渲染 loading 状态
+                    await new Promise(resolve => setTimeout(resolve, 50))
+                    onNavigate(file.path)
+                  }
                 }}
                 onContextMenu={e => {
                   if (disabled) {
@@ -562,38 +573,43 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     // Only act on the rising edge (closed → opened)
     if (wasOpen) return
 
-    const localPromise = localPath
-      ? loadLocal(localPath)
-      : import('@tauri-apps/api/path').then(m => m.homeDir()).then(h => loadLocal(h)).catch(() => loadLocal('/'))
+    // 强制先让 loading 状态渲染到 UI 上
+    const timeoutId = setTimeout(() => {
+      const localPromise = localPath
+        ? loadLocal(localPath)
+        : import('@tauri-apps/api/path').then(m => m.homeDir()).then(h => loadLocal(h)).catch(() => loadLocal('/'))
 
-    let remotePromise: Promise<unknown> = Promise.resolve()
+      let remotePromise: Promise<unknown> = Promise.resolve()
 
-    // Remote panel — two-phase open:
-    //
-    // Phase 1 (instant): load the last-known path immediately so the panel
-    //   shows content right away with no blank loading screen.
-    //
-    // Phase 2 (background): ask the backend for the *real* pwd via an exec
-    //   channel reading /proc/<pid>/cwd of the live PTY shell.  If the real
-    //   pwd differs from what we already loaded, navigate there automatically.
-    //   This corrects timing gaps in client-side cd tracking (e.g. a "cd"
-    //   done within the first 800 ms before get_remote_cwd initialised
-    //   homePathRef, or any cd the tracker simply missed).
-    if (session.sessionId && session.status === 'connected') {
-      const knownPath = session.terminalPath || remotePath || '/'
-      remotePromise = loadRemote(knownPath)
-        .then(() => invoke<string>('get_remote_cwd', { sessionId: session.sessionId }))
-        .then(realCwd => {
-          if (!realCwd) return
-          updateSessionPath(bookmarkTabId, session.id, realCwd)
-          if (realCwd !== knownPath) {
-            return loadRemote(realCwd)
-          }
-        })
-        .catch(() => { /* non-Linux or exec failed — phase 1 result is fine */ })
-    }
+      // Remote panel — two-phase open:
+      //
+      // Phase 1 (instant): load the last-known path immediately so the panel
+      //   shows content right away with no blank loading screen.
+      //
+      // Phase 2 (background): ask the backend for the *real* pwd via an exec
+      //   channel reading /proc/<pid>/cwd of the live PTY shell.  If the real
+      //   pwd differs from what we already loaded, navigate there automatically.
+      //   This corrects timing gaps in client-side cd tracking (e.g. a "cd"
+      //   done within the first 800 ms before get_remote_cwd initialised
+      //   homePathRef, or any cd the tracker simply missed).
+      if (session.sessionId && session.status === 'connected') {
+        const knownPath = session.terminalPath || remotePath || '/'
+        remotePromise = loadRemote(knownPath)
+          .then(() => invoke<string>('get_remote_cwd', { sessionId: session.sessionId }))
+          .then(realCwd => {
+            if (!realCwd) return
+            updateSessionPath(bookmarkTabId, session.id, realCwd)
+            if (realCwd !== knownPath) {
+              return loadRemote(realCwd)
+            }
+          })
+          .catch(() => { /* non-Linux or exec failed — phase 1 result is fine */ })
+      }
 
-    Promise.allSettled([localPromise, remotePromise]).catch(() => {})
+      Promise.allSettled([localPromise, remotePromise]).catch(() => {})
+    }, 50)
+
+    return () => clearTimeout(timeoutId)
   }, [session.fmOpen])
 
   // Live-follow: when the file manager is already open and the user cds in the
@@ -609,13 +625,19 @@ export function FileManager({ session, bookmarkTabId }: Props) {
 
   // ── Navigation helpers ────────────────────────────────────────────────────
 
-  const goLocalUp = () => {
+  const goLocalUp = async () => {
     const parts = localPath.replace(/\/$/, '').split('/')
+    setLocalLoading(true)
+    // 强制先渲染 loading 状态
+    await new Promise(resolve => setTimeout(resolve, 50))
     loadLocal(parts.slice(0, -1).join('/') || '/')
   }
 
-  const goRemoteUp = () => {
+  const goRemoteUp = async () => {
     const parts = remotePath.replace(/\/$/, '').split('/')
+    setRemoteLoading(true)
+    // 强制先渲染 loading 状态
+    await new Promise(resolve => setTimeout(resolve, 50))
     loadRemote(parts.slice(0, -1).join('/') || '/')
   }
 
@@ -1685,6 +1707,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               onRefresh={() => loadLocal(localPath)}
               onNewFolder={() => handleNewFolder('local')}
               onContextMenu={(e, file) => setCtxMenu({ x: e.clientX, y: e.clientY, file, side: 'local' })}
+              onNavigateStart={() => setLocalLoading(true)}
             />
 
             {/* Center divider */}
@@ -1737,6 +1760,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               onRefresh={() => loadRemote(remotePath)}
               onNewFolder={() => handleNewFolder('remote')}
               onContextMenu={(e, file) => setCtxMenu({ x: e.clientX, y: e.clientY, file, side: 'remote' })}
+              onNavigateStart={() => setRemoteLoading(true)}
             />
           </div>
         </div>

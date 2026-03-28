@@ -255,13 +255,37 @@
   font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
   white-space: nowrap;
+  min-width: 72px;
+  justify-content: center;
 }
 
-.hm-connect-btn:hover {
+.hm-connect-btn:hover:not(:disabled) {
   background: var(--color-accent-hover);
   box-shadow: 0 0 10px rgba(130, 100, 220, 0.4);
+}
+
+.hm-connect-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.hm-connect-btn.is-loading {
+  background: var(--color-accent-hover);
+}
+
+.hm-connect-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: hm-spin 0.8s linear infinite;
+}
+
+@keyframes hm-spin {
+  to { transform: rotate(360deg); }
 }
 
 .hm-icon-btn {
@@ -286,6 +310,16 @@
 .hm-icon-btn.danger:hover {
   background: rgba(220, 50, 50, 0.15);
   color: var(--color-error);
+}
+
+.hm-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hm-icon-btn:disabled:hover {
+  background: transparent;
+  color: var(--color-text-muted);
 }
 
 /* ── Host Form shell ──────────────────────────────────────────────────────── */

@@ -66,6 +66,7 @@ export function HostsModal() {
   const [editingHost, setEditingHost] = useState<Bookmark | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [filter, setFilter] = useState('')
+  const [connectingHostId, setConnectingHostId] = useState<string | null>(null)
 
   if (!hostsModalOpen) return null
 
@@ -77,7 +78,14 @@ export function HostsModal() {
     : hosts
 
   const handleConnect = async (hostId: string) => {
-    await openHostTab(hostId)
+    setConnectingHostId(hostId)
+    // 强制让 React 先渲染 loading 状态到 UI 上
+    await new Promise(resolve => setTimeout(resolve, 50))
+    try {
+      await openHostTab(hostId)
+    } finally {
+      setConnectingHostId(null)
+    }
   }
 
   const handleEdit = (h: Bookmark) => {
@@ -170,6 +178,7 @@ export function HostsModal() {
                   key={h.id}
                   host={h}
                   credential={cred}
+                  connecting={connectingHostId === h.id}
                   onConnect={() => handleConnect(h.id)}
                   onEdit={() => handleEdit(h)}
                   onDelete={() => handleDelete(h.id)}
@@ -195,11 +204,12 @@ export function HostsModal() {
 // ── Host Row ──────────────────────────────────────────────────────────────────
 
 function HostRow({
-  host, credential, onConnect, onEdit, onDelete,
+  host, credential, connecting, onConnect, onEdit, onDelete,
 }: {
   host: Bookmark
   credential?: Profile
-  onConnect: () => void
+  connecting: boolean
+  onConnect: () => Promise<void>
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -224,14 +234,23 @@ function HostRow({
       </div>
 
       <div className="hm-row-actions">
-        <button className="hm-connect-btn" onClick={onConnect} title="连接">
-          <Play size={12} strokeWidth={2.5} />
-          连接
+        <button
+          className={`hm-connect-btn${connecting ? ' is-loading' : ''}`}
+          onClick={onConnect}
+          title="连接"
+          disabled={connecting}
+        >
+          {connecting ? (
+            <span className="hm-connect-spinner" />
+          ) : (
+            <Play size={12} strokeWidth={2.5} />
+          )}
+          {connecting ? '连接中...' : '连接'}
         </button>
-        <button className="hm-icon-btn" onClick={onEdit} title="编辑">
+        <button className="hm-icon-btn" onClick={onEdit} title="编辑" disabled={connecting}>
           <Pencil size={14} strokeWidth={1.8} />
         </button>
-        <button className="hm-icon-btn danger" onClick={onDelete} title="删除">
+        <button className="hm-icon-btn danger" onClick={onDelete} title="删除" disabled={connecting}>
           <Trash2 size={14} strokeWidth={1.8} />
         </button>
       </div>
