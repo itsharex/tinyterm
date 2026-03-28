@@ -524,17 +524,38 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }
 
-    set(state => ({
-      bookmarkTabs: state.bookmarkTabs.map(t => {
-        if (t.id !== bookmarkTabId) return t
-        const sessions = t.sessions.filter(s => s.id !== sessionTabId)
-        const activeSessionId =
-          t.activeSessionId === sessionTabId
-            ? sessions[sessions.length - 1]?.id ?? null
-            : t.activeSessionId
-        return { ...t, sessions, activeSessionId }
-      }),
-    }))
+    set(state => {
+      let removedTargetTab = false
+
+      const bookmarkTabs = state.bookmarkTabs
+        .map(t => {
+          if (t.id !== bookmarkTabId) return t
+          const sessions = t.sessions.filter(s => s.id !== sessionTabId)
+          if (sessions.length === 0) {
+            removedTargetTab = true
+            return null
+          }
+
+          const activeSessionId =
+            t.activeSessionId === sessionTabId
+              ? sessions[sessions.length - 1]?.id ?? null
+              : t.activeSessionId
+
+          return { ...t, sessions, activeSessionId }
+        })
+        .filter((t): t is BookmarkTab => t !== null)
+
+      if (!removedTargetTab) {
+        return { bookmarkTabs }
+      }
+
+      const activeBookmarkTabId =
+        state.activeBookmarkTabId === bookmarkTabId
+          ? bookmarkTabs[bookmarkTabs.length - 1]?.id ?? null
+          : state.activeBookmarkTabId
+
+      return { bookmarkTabs, activeBookmarkTabId }
+    })
   },
 
   setActiveSession: (bookmarkTabId, sessionTabId) => {

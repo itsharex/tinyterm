@@ -443,6 +443,29 @@
   color: rgba(220, 210, 255, 0.95);
 }
 
+.session-tab-new:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.session-tab-new.is-loading {
+  background: rgba(120, 90, 200, 0.35);
+  color: rgba(220, 210, 255, 0.95);
+}
+
+.session-tab-new.is-loading svg {
+  animation: session-add-spin 0.6s linear infinite;
+}
+
+@keyframes session-add-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Workspace (terminal + file manager) ─────────────────────────────────── */
 
 .workspace {

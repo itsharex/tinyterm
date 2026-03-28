@@ -106,6 +106,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const termRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const visibleRef = useRef(isVisible)
 
   const settings = useStore(s => s.settings)
   const activeBookmarkTabId = useStore(s => s.activeBookmarkTabId)
@@ -117,6 +118,10 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const isAuthError =
     session.status === 'error' &&
     /auth|password|credential|permission denied/i.test(session.error ?? '')
+
+  useEffect(() => {
+    visibleRef.current = isVisible
+  }, [isVisible])
 
   // ── Terminal setup ────────────────────────────────────────────────────────
 
@@ -140,7 +145,10 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     term.loadAddon(fitAddon)
     term.loadAddon(new WebLinksAddon())
     term.open(termRef.current)
-    fitAddon.fit()
+
+    if (visibleRef.current && termRef.current.clientWidth > 0 && termRef.current.clientHeight > 0) {
+      fitAddon.fit()
+    }
 
     xtermRef.current = term
     fitAddonRef.current = fitAddon
@@ -199,7 +207,11 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
 
     // ── ResizeObserver ────────────────────────────────────────────────────
 
-    const ro = new ResizeObserver(() => fitAddon.fit())
+    const ro = new ResizeObserver(() => {
+      if (!visibleRef.current || !termRef.current) return
+      if (termRef.current.clientWidth === 0 || termRef.current.clientHeight === 0) return
+      fitAddon.fit()
+    })
     ro.observe(termRef.current!)
 
     // ── Cleanup ───────────────────────────────────────────────────────────
@@ -224,11 +236,29 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
 
   // Re-fit when the tab becomes visible
   useEffect(() => {
-    if (isVisible && fitAddonRef.current) {
-      const t = setTimeout(() => fitAddonRef.current?.fit(), 30)
-      return () => clearTimeout(t)
-    }
-  }, [isVisible])
+    if (!isVisible) return
+
+    const resolvedSessionId = backendSessionId ?? session.sessionId
+    const t = setTimeout(() => {
+      const container = termRef.current
+      const fitAddon = fitAddonRef.current
+      const term = xtermRef.current
+      if (!container || !fitAddon || !term) return
+      if (container.clientWidth === 0 || container.clientHeight === 0) return
+
+      fitAddon.fit()
+
+      if (resolvedSessionId) {
+        invoke('resize_terminal', {
+          sessionId: resolvedSessionId,
+          cols: term.cols,
+          rows: term.rows,
+        }).catch(() => {})
+      }
+    }, 30)
+
+    return () => clearTimeout(t)
+  }, [isVisible, backendSessionId, session.sessionId])
 
   // ── Reconnect handling ────────────────────────────────────────────────────
 

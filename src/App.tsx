@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, X, Server, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, X, Server, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { flushSync } from 'react-dom'
 import logoSrc from './assets/logo.png'
 import { useStore } from './store'
 import { Toolbar } from './components/Toolbar'
@@ -16,6 +17,7 @@ const APP_ZOOM_STORAGE_KEY = 'tinyterm.appZoom'
 const APP_ZOOM_STEP = 0.1
 const APP_ZOOM_MIN = 0.8
 const APP_ZOOM_MAX = 1.4
+const ADD_SESSION_MIN_LOADING_MS = 600
 
 function clampAppZoom(value: number) {
   return Math.min(APP_ZOOM_MAX, Math.max(APP_ZOOM_MIN, Number(value.toFixed(2))))
@@ -47,6 +49,7 @@ export default function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [appZoom, setAppZoom] = useState(getInitialAppZoom)
+  const [addingSessionByTab, setAddingSessionByTab] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     loadAll()
@@ -95,11 +98,33 @@ export default function App() {
 
 
   const handleAddSession = async (bookmarkTabId: string) => {
+    if (addingSessionByTab[bookmarkTabId]) return
+
     const tab = bookmarkTabs.find(t => t.id === bookmarkTabId)
     if (!tab) return
     const hostId = tab.hostId || tab.bookmarkId
     if (!hostId) return
-    await openSession(hostId, bookmarkTabId)
+
+    const startedAt = performance.now()
+    setAddingSessionByTab(state => ({ ...state, [bookmarkTabId]: true }))
+
+    // Let browser render loading state
+    await new Promise(r => requestAnimationFrame(r))
+    await new Promise(r => setTimeout(r, 50))
+
+    try {
+      await openSession(hostId, bookmarkTabId)
+    } finally {
+      const elapsed = performance.now() - startedAt
+      const remaining = Math.max(0, ADD_SESSION_MIN_LOADING_MS - elapsed)
+      setTimeout(() => {
+        setAddingSessionByTab(state => {
+          const next = { ...state }
+          delete next[bookmarkTabId]
+          return next
+        })
+      }, remaining)
+    }
   }
 
   return (
@@ -220,6 +245,7 @@ export default function App() {
                   bookmarkTab={bookmarkTab}
                   isActive={bookmarkTab.id === activeBookmarkTabId}
                   onAddSession={handleAddSession}
+                  addingSession={Boolean(addingSessionByTab[bookmarkTab.id])}
                   onCloseSession={closeSession}
                   onSetActiveSession={setActiveSession}
                   onToggleSideTerminal={toggleSideTerminal}
@@ -243,7 +269,8 @@ export default function App() {
 interface HostTabPanelProps {
   bookmarkTab: BookmarkTab
   isActive: boolean
-  onAddSession: (bookmarkTabId: string) => void
+  onAddSession: (bookmarkTabId: string) => Promise<void>
+  addingSession: boolean
   onCloseSession: (bookmarkTabId: string, sessionTabId: string) => void
   onSetActiveSession: (bookmarkTabId: string, sessionTabId: string) => void
   onToggleSideTerminal: (bookmarkTabId: string, sessionTabId: string) => void
@@ -259,12 +286,18 @@ function HostTabPanel({
   bookmarkTab,
   isActive,
   onAddSession,
+  addingSession,
   onCloseSession,
   onSetActiveSession,
   onToggleSideTerminal,
 }: HostTabPanelProps) {
   const [tabContextMenu, setTabContextMenu] = useState<SessionTabContextMenu | null>(null)
   const tabContextMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const handleAddSession = () => {
+    if (addingSession) return
+    void onAddSession(bookmarkTab.id)
+  }
 
   useEffect(() => {
     if (!tabContextMenu) return
@@ -325,11 +358,14 @@ function HostTabPanel({
 
         {(bookmarkTab.hostId || bookmarkTab.bookmarkId) && (
           <button
-            className="session-tab-new"
-            onClick={() => onAddSession(bookmarkTab.id)}
-            title="新建终端"
+            className={`session-tab-new ${addingSession ? 'is-loading' : ''}`}
+            onClick={handleAddSession}
+            disabled={addingSession}
+            title={addingSession ? '正在新建终端...' : '新建终端'}
           >
-            <Plus size={14} strokeWidth={2.5} />
+            {addingSession
+              ? <Loader2 size={14} strokeWidth={2.5} />
+              : <Plus size={14} strokeWidth={2.5} />}
           </button>
         )}
       </div>
