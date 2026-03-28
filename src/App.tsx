@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, X, Server, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
-import { flushSync } from 'react-dom'
 import logoSrc from './assets/logo.png'
 import { useStore } from './store'
 import { Toolbar } from './components/Toolbar'

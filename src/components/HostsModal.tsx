@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import './HostsModal.css'
 import {
-  X, Plus, Play, Pencil, Trash2, Server, Search, ChevronRight, AlertCircle,
+  X, Plus, PlugZap, Pencil, Trash2, Server, Search, ChevronRight, AlertCircle,
 } from 'lucide-react'
 import { useStore } from '../store'
 import type { Bookmark, Profile } from '../types'
@@ -151,9 +151,9 @@ export function HostsModal() {
             onClick={() => { setEditingHost(null); setFormOpen(true) }}
             disabled={credentials.length === 0}
             title={credentials.length === 0 ? '请先创建 Credential' : '新建 Host'}
+            aria-label="新建 Host"
           >
-            <Plus size={14} strokeWidth={2.5} />
-            新建 Host
+            <Plus size={15} strokeWidth={2.4} />
           </button>
         </div>
 
@@ -238,14 +238,14 @@ function HostRow({
           className={`hm-connect-btn${connecting ? ' is-loading' : ''}`}
           onClick={onConnect}
           title="连接"
+          aria-label="连接"
           disabled={connecting}
         >
           {connecting ? (
             <span className="hm-connect-spinner" />
           ) : (
-            <Play size={12} strokeWidth={2.5} />
+            <PlugZap size={15} strokeWidth={2.2} />
           )}
-          {connecting ? '连接中...' : '连接'}
         </button>
         <button className="hm-icon-btn" onClick={onEdit} title="编辑" disabled={connecting}>
           <Pencil size={14} strokeWidth={1.8} />
@@ -386,10 +386,12 @@ function HostForm({
         </div>
 
         <div className="hf-footer">
-          <button className="btn-ghost" onClick={onCancel} disabled={saving}>取消</button>
-          <button className="btn-primary" onClick={handleSave} disabled={saving || credentials.length === 0}>
-            {saving ? '保存中...' : host ? '更新' : '创建'}
-          </button>
+          <div className="hf-footer-group">
+            <button className="btn-ghost" onClick={onCancel} disabled={saving}>取消</button>
+            <button className="btn-primary" onClick={handleSave} disabled={saving || credentials.length === 0}>
+              {saving ? '保存中...' : host ? '更新' : '创建'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

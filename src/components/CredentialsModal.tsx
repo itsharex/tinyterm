@@ -62,9 +62,10 @@ export function CredentialsModal() {
           <button
             className="cm-add-btn"
             onClick={() => { setEditingCredential(null); setFormOpen(true) }}
+            title="新建 Credential"
+            aria-label="新建 Credential"
           >
-            <Plus size={14} strokeWidth={2.5} />
-            新建 Credential
+            <Plus size={15} strokeWidth={2.4} />
           </button>
         </div>
 
@@ -314,10 +315,12 @@ function CredentialForm({
         </div>
 
         <div className="cf-footer">
-          <button className="btn-ghost" onClick={onCancel} disabled={saving}>取消</button>
-          <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? '保存中...' : credential ? '更新' : '创建'}
-          </button>
+          <div className="cf-footer-group">
+            <button className="btn-ghost" onClick={onCancel} disabled={saving}>取消</button>
+            <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : credential ? '更新' : '创建'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
