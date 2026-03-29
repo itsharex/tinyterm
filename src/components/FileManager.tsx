@@ -481,6 +481,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   const updateTransfer = useStore(s => s.updateTransfer)
   const toggleFm = useStore(s => s.toggleFm)
   const updateSessionPath = useStore(s => s.updateSessionPath)
+  const openConfirmDialog = useStore(s => s.openConfirmDialog)
+  const openAlertDialog = useStore(s => s.openAlertDialog)
   const collapsed = !session.fmOpen
 
   // Track previous fmOpen to detect false→true edge
@@ -1212,11 +1214,14 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   const selectedRemoteItems = visibleRemoteFiles
     .filter(item => selectedRemotePathSet.has(item.path))
 
-  const handleTransferToRemote = () => {
+  const handleTransferToRemote = async () => {
     if (localDeleting || remoteDeleting) return
 
     if (selectedLocalTransferItems.length === 0) {
-      alert('请先在本地面板选择要上传的文件或文件夹')
+      await openAlertDialog({
+        title: '上传提示',
+        message: '请先在本地面板选择要上传的文件或文件夹',
+      })
       return
     }
 
@@ -1317,11 +1322,14 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     })
   }
 
-  const handleTransferToLocal = () => {
+  const handleTransferToLocal = async () => {
     if (localDeleting || remoteDeleting) return
 
     if (selectedRemoteItems.length === 0) {
-      alert('请先在远程面板选择要下载的文件或文件夹')
+      await openAlertDialog({
+        title: '下载提示',
+        message: '请先在远程面板选择要下载的文件或文件夹',
+      })
       return
     }
 
@@ -1537,7 +1545,13 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       ? `"${selectedItems[0].name}"`
       : `${selectedItems.length} 项`
 
-    if (!confirm(`确认删除 ${label} ?`)) return
+    const confirmed = await openConfirmDialog({
+      title: '删除确认',
+      message: `确认删除 ${label} ?`,
+      confirmText: '删除',
+      cancelText: '取消',
+    })
+    if (!confirmed) return
 
     try {
       if (side === 'local') setLocalDeleting(true)
@@ -1590,7 +1604,12 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         setLastSelectedRemotePath(null)
         loadRemote(remotePath)
       }
-    } catch (e) { alert('删除失败: ' + String(e)) }
+    } catch (e) {
+      await openAlertDialog({
+        title: '删除失败',
+        message: String(e),
+      })
+    }
     finally {
       if (side === 'local') setLocalDeleting(false)
       else setRemoteDeleting(false)
@@ -1616,7 +1635,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
 
     const rawValue = inlineAction.value.trim()
     if (!rawValue) {
-      alert(inlineAction.type === 'rename' ? '请输入新名称' : '请输入文件夹名称')
+      await openAlertDialog({
+        title: inlineAction.type === 'rename' ? '重命名提示' : '新建目录提示',
+        message: inlineAction.type === 'rename' ? '请输入新名称' : '请输入文件夹名称',
+      })
       return
     }
 
@@ -1652,7 +1674,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         loadRemote(remotePath)
       }
     } catch (e) {
-      alert((inlineAction.type === 'rename' ? '重命名失败: ' : '创建失败: ') + String(e))
+      await openAlertDialog({
+        title: inlineAction.type === 'rename' ? '重命名失败' : '创建失败',
+        message: String(e),
+      })
     }
   }
 

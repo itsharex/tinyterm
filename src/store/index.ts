@@ -32,6 +32,7 @@ interface AppState {
   // Modals
   credentialsModalOpen: boolean
   hostsModalOpen: boolean
+  appDialog: AppDialogState | null
 
   // Actions - Data loading
   loadAll: () => Promise<void>
@@ -77,6 +78,20 @@ interface AppState {
   openHostsModal: () => void
   closeHostsModal: () => void
 
+  // Unified app dialog
+  openConfirmDialog: (options: {
+    title: string
+    message: string
+    confirmText?: string
+    cancelText?: string
+  }) => Promise<boolean>
+  openAlertDialog: (options: {
+    title: string
+    message: string
+    confirmText?: string
+  }) => Promise<void>
+  resolveAppDialog: (action: 'confirm' | 'cancel') => void
+
   // Transfer progress
   updateTransfer: (progress: TransferProgress) => void
 }
@@ -93,6 +108,41 @@ const DEFAULT_SETTINGS: Settings = {
   cursor_style: 'block',
   cursor_blink: true,
   bell_style: 'none',
+}
+
+type AppDialogState = {
+  mode: 'confirm' | 'alert'
+  title: string
+  message: string
+  confirmText: string
+  cancelText?: string
+}
+
+let pendingAppDialogResolve: ((action: 'confirm' | 'cancel') => void) | null = null
+
+function showAppDialog(
+  set: (partial: Partial<AppState>) => void,
+  dialog: AppDialogState,
+): Promise<'confirm' | 'cancel'> {
+  if (pendingAppDialogResolve) {
+    pendingAppDialogResolve('cancel')
+    pendingAppDialogResolve = null
+  }
+
+  return new Promise(resolve => {
+    pendingAppDialogResolve = resolve
+    set({ appDialog: dialog })
+  })
+}
+
+function settleAppDialog(
+  set: (partial: Partial<AppState>) => void,
+  action: 'confirm' | 'cancel',
+) {
+  const resolve = pendingAppDialogResolve
+  pendingAppDialogResolve = null
+  set({ appDialog: null })
+  resolve?.(action)
 }
 
 type HostKeyPrompt = {
@@ -146,7 +196,12 @@ async function createSessionWithTrust(bookmarkId: string, cols: number, rows: nu
       throw error
     }
 
-    const confirmed = window.confirm(buildHostKeyPromptMessage(prompt))
+    const confirmed = await useStore.getState().openConfirmDialog({
+      title: 'SSH 主机指纹确认',
+      message: buildHostKeyPromptMessage(prompt),
+      confirmText: '信任并继续',
+      cancelText: '取消',
+    })
     if (!confirmed) {
       throw new Error('已取消信任该 SSH 主机指纹')
     }
@@ -215,6 +270,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   credentialsModalOpen: false,
   hostsModalOpen: false,
+  appDialog: null,
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -754,6 +810,32 @@ export const useStore = create<AppState>((set, get) => ({
   closeCredentialsModal: () => set({ credentialsModalOpen: false }),
   openHostsModal: () => set({ hostsModalOpen: true }),
   closeHostsModal: () => set({ hostsModalOpen: false }),
+
+  // ── Unified app dialog ──────────────────────────────────────────────────
+
+  openConfirmDialog: async ({ title, message, confirmText = '确认', cancelText = '取消' }) => {
+    const action = await showAppDialog(set as any, {
+      mode: 'confirm',
+      title,
+      message,
+      confirmText,
+      cancelText,
+    })
+    return action === 'confirm'
+  },
+
+  openAlertDialog: async ({ title, message, confirmText = '知道了' }) => {
+    await showAppDialog(set as any, {
+      mode: 'alert',
+      title,
+      message,
+      confirmText,
+    })
+  },
+
+  resolveAppDialog: (action) => {
+    settleAppDialog(set as any, action)
+  },
 
   // ── Transfer progress ─────────────────────────────────────────────────────
 

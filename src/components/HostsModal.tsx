@@ -61,6 +61,7 @@ export function HostsModal() {
     updateBookmark,
     deleteBookmark,
     openHostTab,
+    openConfirmDialog,
   } = useStore()
 
   const [editingHost, setEditingHost] = useState<Bookmark | null>(null)
@@ -94,7 +95,13 @@ export function HostsModal() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确认删除该主机？')) return
+    const confirmed = await openConfirmDialog({
+      title: '删除 Host',
+      message: '确认删除该主机？',
+      confirmText: '删除',
+      cancelText: '取消',
+    })
+    if (!confirmed) return
     await deleteBookmark(id)
   }
 

@@ -1,0 +1,49 @@
+.app-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(6, 4, 15, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.app-dialog-shell {
+  width: min(460px, calc(100vw - 36px));
+  background: rgba(30, 20, 60, 0.96);
+  border: 1px solid rgba(120, 90, 200, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.app-dialog-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(120, 90, 200, 0.24);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-dialog-body {
+  padding: 14px;
+}
+
+.app-dialog-body p {
+  margin: 0;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.app-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(120, 90, 200, 0.2);
+}

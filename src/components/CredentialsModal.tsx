@@ -12,6 +12,7 @@ export function CredentialsModal() {
     createProfile,
     updateProfile,
     deleteProfile,
+    openConfirmDialog,
   } = useStore()
 
   const [editingCredential, setEditingCredential] = useState<Profile | null>(null)
@@ -25,7 +26,13 @@ export function CredentialsModal() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确认删除该认证配置？')) return
+    const confirmed = await openConfirmDialog({
+      title: '删除 Credential',
+      message: '确认删除该认证配置？',
+      confirmText: '删除',
+      cancelText: '取消',
+    })
+    if (!confirmed) return
     await deleteProfile(id)
   }
 
