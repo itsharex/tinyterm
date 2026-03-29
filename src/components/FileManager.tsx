@@ -476,6 +476,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   // Confirm dialog
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState | null>(null)
   const [transferConflict, setTransferConflict] = useState<TransferConflictState | null>(null)
+  const [remoteTarSupport, setRemoteTarSupport] = useState<boolean | null>(null)
+  const [remoteTarChecking, setRemoteTarChecking] = useState(false)
 
   const transfers = useStore(s => s.transfers)
   const updateTransfer = useStore(s => s.updateTransfer)
@@ -647,6 +649,38 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     `${dir.replace(/\/$/, '')}/${name}`
 
   const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`
+
+  const ensureRemoteTarSupport = useCallback(async (): Promise<boolean> => {
+    if (!session.sessionId) return false
+    if (remoteTarSupport !== null) return remoteTarSupport
+
+    setRemoteTarChecking(true)
+    try {
+      const output = await invoke<string>('execute_remote_command', {
+        sessionId: session.sessionId,
+        command: "command -v tar >/dev/null 2>&1 && printf '__TINYTERM_TAR_OK__' || true",
+      })
+      const supported = output.includes('__TINYTERM_TAR_OK__')
+      setRemoteTarSupport(supported)
+      return supported
+    } catch {
+      setRemoteTarSupport(false)
+      return false
+    } finally {
+      setRemoteTarChecking(false)
+    }
+  }, [session.sessionId, remoteTarSupport])
+
+  useEffect(() => {
+    setRemoteTarSupport(null)
+    setRemoteTarChecking(false)
+  }, [session.sessionId])
+
+  useEffect(() => {
+    if (!session.fmOpen || !session.sessionId || session.status !== 'connected') return
+    if (remoteTarSupport !== null || remoteTarChecking) return
+    ensureRemoteTarSupport().catch(() => {})
+  }, [session.fmOpen, session.sessionId, session.status, remoteTarSupport, remoteTarChecking, ensureRemoteTarSupport])
 
   const selectedLocalPathSet = useMemo(() => new Set(selectedLocalPaths), [selectedLocalPaths])
   const selectedRemotePathSet = useMemo(() => new Set(selectedRemotePaths), [selectedRemotePaths])
@@ -960,8 +994,160 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     })
   }, [])
 
+  const collectLocalUploadTasks = useCallback(async (
+    sourceDir: string,
+    targetRemoteDir: string,
+  ): Promise<Array<{ localPath: string; remotePath: string }>> => {
+    if (!session.sessionId) return []
+    const entries = await invoke<FileInfo[]>('list_local_dir', { path: sourceDir })
+    const tasks: Array<{ localPath: string; remotePath: string }> = []
+
+    for (const entry of entries) {
+      const remoteEntryPath = joinPath(targetRemoteDir, entry.name)
+      if (entry.is_dir) {
+        await invoke('create_remote_dir', {
+          sessionId: session.sessionId,
+          path: remoteEntryPath,
+        }).catch(() => {})
+        const nested = await collectLocalUploadTasks(entry.path, remoteEntryPath)
+        tasks.push(...nested)
+      } else {
+        tasks.push({ localPath: entry.path, remotePath: remoteEntryPath })
+      }
+    }
+
+    return tasks
+  }, [session.sessionId, joinPath])
+
+  const collectRemoteDownloadTasks = useCallback(async (
+    sourceRemoteDir: string,
+    targetLocalDir: string,
+  ): Promise<Array<{ remotePath: string; localPath: string }>> => {
+    if (!session.sessionId) return []
+
+    const base = sourceRemoteDir.replace(/\/$/, '') || '/'
+    const files = await invoke<FileInfo[]>('scan_remote_folder', {
+      sessionId: session.sessionId,
+      path: sourceRemoteDir,
+    })
+
+    return files.map(file => {
+      const relative = file.path.startsWith(`${base}/`)
+        ? file.path.slice(base.length + 1)
+        : file.name
+      return {
+        remotePath: file.path,
+        localPath: joinPath(targetLocalDir, relative),
+      }
+    })
+  }, [session.sessionId, joinPath])
+
   const doUpload = useCallback(async (localItems: FileInfo[], targetRemoteDir: string, overwriteAll = false) => {
     if (!session.sessionId) return
+
+    const canUseTar = await ensureRemoteTarSupport()
+
+    // Fallback path: recursive SFTP upload when remote tar is unavailable.
+    if (!canUseTar) {
+      const folderItems = localItems.filter(i => i.is_dir)
+      const fileItems = localItems.filter(i => !i.is_dir)
+
+      for (const folder of folderItems) {
+        const remoteTarget = joinPath(targetRemoteDir, folder.name)
+        const transferId = `upload:${remoteTarget}`
+
+        updateTransfer({
+          id: transferId,
+          file_name: folder.name,
+          direction: 'upload',
+          total: 1,
+          transferred: 0,
+          status: 'pending',
+          target_path: remoteTarget,
+        })
+
+        try {
+          await invoke('create_remote_dir', {
+            sessionId: session.sessionId,
+            path: remoteTarget,
+          }).catch(() => {})
+
+          const tasks = await collectLocalUploadTasks(folder.path, remoteTarget)
+          if (tasks.length === 0) {
+            updateTransfer({
+              id: transferId,
+              file_name: folder.name,
+              direction: 'upload',
+              total: 1,
+              transferred: 1,
+              status: 'done',
+              target_path: remoteTarget,
+            })
+            continue
+          }
+
+          for (let index = 0; index < tasks.length; index += 1) {
+            const task = tasks[index]
+            const result = await startTransferTask('upload', task.localPath, task.remotePath, overwriteAll, {
+              transferId,
+              displayName: folder.name,
+              progressTotal: tasks.length,
+              progressStart: index,
+              displayTargetPath: remoteTarget,
+            })
+
+            if (result.error) {
+              throw new Error(result.error)
+            }
+
+            if (result.conflict && !overwriteAll) {
+              updateTransfer({
+                id: transferId,
+                file_name: folder.name,
+                direction: 'upload',
+                total: tasks.length,
+                transferred: index,
+                status: 'error',
+                error: '存在同名文件，已跳过冲突项。可重试并选择全部覆盖。',
+                target_path: remoteTarget,
+              })
+              break
+            }
+          }
+
+          const final = useStore.getState().transfers.find(t => t.id === transferId)
+          if (final?.status !== 'error') {
+            updateTransfer({
+              id: transferId,
+              file_name: folder.name,
+              direction: 'upload',
+              total: tasks.length,
+              transferred: tasks.length,
+              status: 'done',
+              target_path: remoteTarget,
+            })
+          }
+        } catch (e) {
+          updateTransfer({
+            id: transferId,
+            file_name: folder.name,
+            direction: 'upload',
+            total: 1,
+            transferred: 0,
+            status: 'error',
+            error: String(e),
+            target_path: remoteTarget,
+          })
+        }
+      }
+
+      if (fileItems.length > 0) {
+        await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll)
+      } else {
+        await loadRemote(targetRemoteDir)
+      }
+      return
+    }
 
     const { tempDir } = await import('@tauri-apps/api/path')
     const localTmpDir = await tempDir()
@@ -1075,12 +1261,118 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     } else {
       await loadRemote(targetRemoteDir)
     }
-  }, [session.sessionId, joinPath, updateTransfer, runUploadQueue, loadRemote, shellQuote, waitForStageProgress])
+  }, [session.sessionId, ensureRemoteTarSupport, collectLocalUploadTasks, joinPath, updateTransfer, startTransferTask, runUploadQueue, loadRemote, shellQuote, waitForStageProgress])
 
   // ── Download (remote → local) ─────────────────────────────────────────────
 
   const doDownload = useCallback(async (remoteItems: FileInfo[], targetLocalDir: string, overwriteAll = false) => {
     if (!session.sessionId) return
+
+    const canUseTar = await ensureRemoteTarSupport()
+
+    // Fallback path: recursive SFTP download when remote tar is unavailable.
+    if (!canUseTar) {
+      const folderItems = remoteItems.filter(i => i.is_dir)
+      const fileItems = remoteItems.filter(i => !i.is_dir)
+
+      for (const folder of folderItems) {
+        const localTarget = joinPath(targetLocalDir, folder.name)
+        const transferId = `download:${localTarget}`
+
+        updateTransfer({
+          id: transferId,
+          file_name: folder.name,
+          direction: 'download',
+          total: 1,
+          transferred: 0,
+          status: 'pending',
+          target_path: localTarget,
+        })
+
+        try {
+          await invoke('create_local_dir', { path: localTarget }).catch(() => {})
+
+          const tasks = await collectRemoteDownloadTasks(folder.path, localTarget)
+          if (tasks.length === 0) {
+            updateTransfer({
+              id: transferId,
+              file_name: folder.name,
+              direction: 'download',
+              total: 1,
+              transferred: 1,
+              status: 'done',
+              target_path: localTarget,
+            })
+            continue
+          }
+
+          for (let index = 0; index < tasks.length; index += 1) {
+            const task = tasks[index]
+            const parent = task.localPath.slice(0, task.localPath.lastIndexOf('/'))
+            if (parent) {
+              await invoke('create_local_dir', { path: parent }).catch(() => {})
+            }
+
+            const result = await startTransferTask('download', task.remotePath, task.localPath, overwriteAll, {
+              transferId,
+              displayName: folder.name,
+              progressTotal: tasks.length,
+              progressStart: index,
+              displayTargetPath: localTarget,
+            })
+
+            if (result.error) {
+              throw new Error(result.error)
+            }
+
+            if (result.conflict && !overwriteAll) {
+              updateTransfer({
+                id: transferId,
+                file_name: folder.name,
+                direction: 'download',
+                total: tasks.length,
+                transferred: index,
+                status: 'error',
+                error: '存在同名文件，已跳过冲突项。可重试并选择全部覆盖。',
+                target_path: localTarget,
+              })
+              break
+            }
+          }
+
+          const final = useStore.getState().transfers.find(t => t.id === transferId)
+          if (final?.status !== 'error') {
+            updateTransfer({
+              id: transferId,
+              file_name: folder.name,
+              direction: 'download',
+              total: tasks.length,
+              transferred: tasks.length,
+              status: 'done',
+              target_path: localTarget,
+            })
+          }
+        } catch (e) {
+          updateTransfer({
+            id: transferId,
+            file_name: folder.name,
+            direction: 'download',
+            total: 1,
+            transferred: 0,
+            status: 'error',
+            error: String(e),
+            target_path: localTarget,
+          })
+        }
+      }
+
+      if (fileItems.length > 0) {
+        await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll)
+      } else {
+        await loadLocal(targetLocalDir)
+      }
+      return
+    }
 
     const { tempDir } = await import('@tauri-apps/api/path')
     const localTmpDir = await tempDir()
@@ -1203,7 +1495,7 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     } else {
       await loadLocal(targetLocalDir)
     }
-  }, [session.sessionId, joinPath, updateTransfer, runDownloadQueue, loadLocal, shellQuote, waitForStageProgress])
+  }, [session.sessionId, ensureRemoteTarSupport, collectRemoteDownloadTasks, joinPath, updateTransfer, startTransferTask, runDownloadQueue, loadLocal, shellQuote, waitForStageProgress])
 
   // ── Arrow button transfers ────────────────────────────────────────────────
 

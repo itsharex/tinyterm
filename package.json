@@ -4,7 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "lint": "npm run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "tsc && vite build",
+    "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -24,12 +29,16 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "jsdom": "^25.0.1",
     "typescript": "^5.5.3",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vitest": "^2.1.9"
   },
   "main": "index.js",
   "keywords": [],

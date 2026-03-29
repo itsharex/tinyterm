@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter, State};
+use log::{info, warn};
 
 use crate::models::{Bookmark, FileInfo, RemoteDeleteStatus, TransferProgress};
 use crate::session::SessionManager;
@@ -346,6 +347,14 @@ pub fn upload_file(
     target_path_override: Option<String>,
     app: AppHandle,
 ) -> Result<(), String> {
+    info!(
+        "upload_file request session_id={} local_path={} remote_path={} overwrite={} transfer_id={}",
+        session_id,
+        local_path,
+        remote_path,
+        overwrite,
+        transfer_id.clone().unwrap_or_else(|| format!("upload:{}", remote_path))
+    );
     let file_name = display_name.unwrap_or_else(|| {
         Path::new(&local_path)
         .file_name()
@@ -475,6 +484,11 @@ pub fn upload_file(
 
         match result {
             Ok(()) => {
+                info!(
+                    "upload_file success transfer_id={} target_path={}",
+                    transfer_id,
+                    target_path
+                );
                 cancelled_transfers.lock().remove(&transfer_id);
                 emit_transfer_progress(
                     &app,
@@ -491,6 +505,12 @@ pub fn upload_file(
                 )
             }
             Err(err) => {
+                warn!(
+                    "upload_file failed transfer_id={} target_path={} error={}",
+                    transfer_id,
+                    target_path,
+                    err
+                );
                 cancelled_transfers.lock().remove(&transfer_id);
                 emit_transfer_progress(
                     &app,
@@ -529,6 +549,14 @@ pub fn download_file(
     target_path_override: Option<String>,
     app: AppHandle,
 ) -> Result<(), String> {
+    info!(
+        "download_file request session_id={} remote_path={} local_path={} overwrite={} transfer_id={}",
+        session_id,
+        remote_path,
+        local_path,
+        overwrite,
+        transfer_id.clone().unwrap_or_else(|| format!("download:{}", local_path))
+    );
     let file_name = display_name.unwrap_or_else(|| {
         Path::new(&remote_path)
         .file_name()
@@ -657,6 +685,12 @@ pub fn download_file(
 
         match result {
             Ok(total) => {
+                info!(
+                    "download_file success transfer_id={} target_path={} total_bytes={}",
+                    transfer_id,
+                    target_path,
+                    total
+                );
                 cancelled_transfers.lock().remove(&transfer_id);
                 let stage_total = configured_stage_total.unwrap_or(total);
                 emit_transfer_progress(
@@ -676,6 +710,12 @@ pub fn download_file(
                 );
             }
             Err(err) => {
+                warn!(
+                    "download_file failed transfer_id={} target_path={} error={}",
+                    transfer_id,
+                    target_path,
+                    err
+                );
                 cancelled_transfers.lock().remove(&transfer_id);
                 emit_transfer_progress(
                     &app,

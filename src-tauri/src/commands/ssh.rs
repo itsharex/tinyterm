@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use tauri::State;
 use uuid::Uuid;
+use log::{info, warn};
 
 use crate::crypto;
 use crate::models::{HostKeyVerificationPrompt, TrustedHostKey};
@@ -175,6 +176,11 @@ pub fn create_session(
     session_manager: State<SessionManager>,
     request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
+    info!(
+        "create_session request bookmark_id={} cols={} rows={}",
+        request.bookmark_id, request.cols, request.rows
+    );
+
     let (bookmark, _) = resolve_bookmark_for_connection(&db_path, &request.bookmark_id)?;
 
     let password = request.password.as_deref();
@@ -218,6 +224,10 @@ pub fn create_session(
         });
     }
 
+    let connected_bookmark_id = bookmark.id.clone();
+    let connected_host = bookmark.host.clone();
+    let connected_port = bookmark.port;
+
     let session_id = Uuid::new_v4().to_string();
     let ssh_session = SshSession {
         session: session_arc,
@@ -237,6 +247,14 @@ pub fn create_session(
         .lock()
         .insert(session_id.clone(), ssh_session);
 
+    info!(
+        "create_session success session_id={} bookmark_id={} host={}:{}",
+        session_id,
+        connected_bookmark_id,
+        connected_host,
+        connected_port
+    );
+
     Ok(CreateSessionResponse { session_id })
 }
 
@@ -250,6 +268,13 @@ pub struct TrustHostKeyRequest {
 
 #[tauri::command]
 pub fn trust_host_key(db_path: State<DbPath>, request: TrustHostKeyRequest) -> Result<(), String> {
+    info!(
+        "trust_host_key host={}:{} key_type={} fingerprint={}",
+        request.host,
+        request.port,
+        request.key_type,
+        request.fingerprint
+    );
     let now = now_unix();
     storage::upsert_trusted_host_key(&db_path, &TrustedHostKey {
         host: request.host,
@@ -386,6 +411,7 @@ pub fn close_session(
     session_manager: State<SessionManager>,
     session_id: String,
 ) -> Result<(), String> {
+    info!("close_session request session_id={}", session_id);
     let ssh_sess = { session_manager.sessions.lock().remove(&session_id) };
     if let Some(ssh_sess) = ssh_sess {
         // Signal the reader thread to exit cleanly.
@@ -403,6 +429,9 @@ pub fn close_session(
         // Lock the session mutex so any in-flight write finishes first.
         let _sess = ssh_sess.session.lock();
         let _ = ssh_sess.channel.lock().send_eof();
+        info!("close_session success session_id={}", session_id);
+    } else {
+        warn!("close_session ignored missing session_id={}", session_id);
     }
     Ok(())
 }

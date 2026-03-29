@@ -6,7 +6,6 @@
   "permissions": [
     "core:default",
     "core:path:default",
-    "shell:allow-open",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",

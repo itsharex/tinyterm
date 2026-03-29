@@ -4,6 +4,17 @@ import react from "@vitejs/plugin-react";
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'zustand'],
+          'vendor-xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
+          'vendor-icons': ['lucide-react'],
+        },
+      },
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
