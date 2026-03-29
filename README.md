@@ -1,3 +1,5 @@
+![TinyTerm Screenshot](image.png)
+
 # TinyTerm
 
 ![TinyTerm Logo](src/assets/logo.png)
