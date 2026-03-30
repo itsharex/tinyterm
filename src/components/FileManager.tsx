@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { TransferProgress, FileInfo, SessionTab } from '../types'
 import { invoke } from '@tauri-apps/api/core'
@@ -58,6 +58,15 @@ interface CtxMenu { x: number; y: number; file: FileInfo; side: 'local' | 'remot
 type InlineAction =
   | { type: 'rename'; side: 'local' | 'remote'; file: FileInfo; value: string }
   | { type: 'new-folder'; side: 'local' | 'remote'; value: string }
+
+function getNormalizedPointerPosition(e: ReactMouseEvent) {
+  const zoomValue = Number(getComputedStyle(document.documentElement).zoom || '1')
+  const zoom = Number.isFinite(zoomValue) && zoomValue > 0 ? zoomValue : 1
+  return {
+    x: e.clientX / zoom,
+    y: e.clientY / zoom,
+  }
+}
 
 function ContextMenu({
   menu, onClose, onDelete, onRename, deleteLabel = '删除',
@@ -2023,7 +2032,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               showHidden={showLocalHidden}
               onRefresh={() => loadLocal(localPath)}
               onNewFolder={() => handleNewFolder('local')}
-              onContextMenu={(e, file) => setCtxMenu({ x: e.clientX, y: e.clientY, file, side: 'local' })}
+              onContextMenu={(e, file) => {
+                const pos = getNormalizedPointerPosition(e)
+                setCtxMenu({ x: pos.x, y: pos.y, file, side: 'local' })
+              }}
               onNavigateStart={() => setLocalLoading(true)}
             />
 
@@ -2076,7 +2088,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               showHidden={showRemoteHidden}
               onRefresh={() => loadRemote(remotePath)}
               onNewFolder={() => handleNewFolder('remote')}
-              onContextMenu={(e, file) => setCtxMenu({ x: e.clientX, y: e.clientY, file, side: 'remote' })}
+              onContextMenu={(e, file) => {
+                const pos = getNormalizedPointerPosition(e)
+                setCtxMenu({ x: pos.x, y: pos.y, file, side: 'remote' })
+              }}
               onNavigateStart={() => setRemoteLoading(true)}
             />
           </div>
@@ -2143,6 +2158,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
                   value={inlineAction.value}
                   onChange={e => setInlineAction(action => action ? { ...action, value: e.target.value } : action)}
                   onKeyDown={handleInlineActionKeyDown}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   autoFocus
                 />
               </div>
