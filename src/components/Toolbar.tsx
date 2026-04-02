@@ -1,5 +1,5 @@
 import React from 'react'
-import { ShieldCheck, Server, Hand } from 'lucide-react'
+import { ShieldCheck, Server } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useStore } from '../store'
 import './Toolbar.css'
@@ -34,7 +34,11 @@ export function Toolbar() {
   }
 
   return (
-    <div className="toolbar">
+    <div 
+      className="toolbar"
+      onMouseDown={handleDragStart}
+      onDoubleClick={handleDoubleClick}
+    >
       <div className="toolbar-spacer" />
       <div className="toolbar-pill">
         <ToolbarBtn
@@ -48,13 +52,6 @@ export function Toolbar() {
           label="主机"
           onClick={openHostsModal}
         />
-      </div>
-      <div 
-        className="toolbar-drag-icon" 
-        onMouseDown={handleDragStart}
-        onDoubleClick={handleDoubleClick}
-      >
-        <Hand size={14} strokeWidth={1.9} />
       </div>
       <div className="toolbar-spacer" />
     </div>

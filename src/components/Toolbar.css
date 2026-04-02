@@ -11,6 +11,11 @@
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  cursor: grab;
+}
+
+.toolbar:active {
+  cursor: grabbing;
 }
 
 .toolbar-spacer {
@@ -80,23 +85,6 @@
 .toolbar-btn-label {
   font-size: 12px;
   line-height: 1;
-}
-
-/* ── Drag Icon ─────────────────────────────────────────────────────────── */
-
-.toolbar-drag-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  margin-left: 8px;
-  color: rgba(220, 210, 255, 0.5);
-  cursor: grab;
-  transition: all 0.18s ease;
-}
-
-.toolbar-drag-icon:hover {
-  color: rgba(220, 210, 255, 0.75);
 }
 
 .toolbar-drag-icon:active {
