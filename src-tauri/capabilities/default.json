@@ -6,6 +6,11 @@
   "permissions": [
     "core:default",
     "core:path:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-decorations",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-is-maximized",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",
