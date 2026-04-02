@@ -7,7 +7,7 @@ export function Toolbar() {
   const { openCredentialsModal, openHostsModal } = useStore()
 
   return (
-    <div className="toolbar">
+    <div className="toolbar" data-tauri-drag-region>
       <div className="toolbar-pill">
         <ToolbarBtn
           icon={<ShieldCheck size={12} strokeWidth={1.9} />}

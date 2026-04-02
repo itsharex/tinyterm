@@ -4,10 +4,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 0 2px;
+  gap: 12px;
+  padding: 0 2px;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  /* Enable window dragging for the entire toolbar area */
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 .toolbar-pill {
@@ -23,6 +27,9 @@
   box-shadow:
     0 2px 16px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  /* Disable dragging on the pill itself (buttons should work) */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .toolbar-divider {
