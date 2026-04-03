@@ -27,20 +27,22 @@ export function AppDialogHost() {
         </div>
 
         <div className="app-dialog-footer">
-          {dialog.mode === 'confirm' && (
+          <div className="app-dialog-btn-group">
+            {dialog.mode === 'confirm' && (
+              <button
+                className="btn-ghost"
+                onClick={() => resolveAppDialog('cancel')}
+              >
+                {dialog.cancelText || '取消'}
+              </button>
+            )}
             <button
-              className="btn-ghost"
-              onClick={() => resolveAppDialog('cancel')}
+              className="btn-primary"
+              onClick={() => resolveAppDialog('confirm')}
             >
-              {dialog.cancelText || '取消'}
+              {dialog.confirmText}
             </button>
-          )}
-          <button
-            className="btn-primary"
-            onClick={() => resolveAppDialog('confirm')}
-          >
-            {dialog.confirmText}
-          </button>
+          </div>
         </div>
       </div>
     </div>

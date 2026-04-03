@@ -381,10 +381,9 @@ function HostTabPanel({
             className="glass-panel"
             style={{
               position: 'fixed',
-              top: tabContextMenu.y,
-              left: tabContextMenu.x,
+              top: tabContextMenu.y + 10,
+              left: tabContextMenu.x + 40,
               zIndex: 2400,
-              minWidth: '160px',
               padding: '4px',
               borderRadius: '10px',
             }}

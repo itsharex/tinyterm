@@ -313,15 +313,17 @@ function ConfirmDialog({ title, message, onCancel, actions }: ConfirmDialogProps
           <p style={{ margin: 0, color: 'var(--color-text-primary)', whiteSpace: 'pre-line' }}>{message}</p>
         </div>
         <div className="cf-footer">
-          {resolvedActions.map(action => (
-            <button
-              key={action.label}
-              className={action.variant === 'ghost' ? 'btn-ghost' : 'btn-primary'}
-              onClick={action.onClick}
-            >
-              {action.label}
-            </button>
-          ))}
+          <div className="cf-footer-group">
+            {resolvedActions.map(action => (
+              <button
+                key={action.label}
+                className={action.variant === 'ghost' ? 'btn-ghost' : 'btn-primary'}
+                onClick={action.onClick}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>,
