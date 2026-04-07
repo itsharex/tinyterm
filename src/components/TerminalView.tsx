@@ -107,10 +107,12 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const xtermRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const visibleRef = useRef(isVisible)
+  const sessionIdRef = useRef<string | null>(null)
 
   const settings = useStore(s => s.settings)
   const activeBookmarkTabId = useStore(s => s.activeBookmarkTabId)
   const reconnectSession = useStore(s => s.reconnectSession)
+  const appZoom = useStore(s => s.appZoom)
 
   const [passwordInput, setPasswordInput] = useState('')
   const [reconnecting, setReconnecting] = useState(false)
@@ -130,11 +132,14 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     if (!termRef.current || !resolvedSessionId || session.status !== 'connected') return
 
     const sessionId = resolvedSessionId
+    sessionIdRef.current = sessionId
+
+    const baseFontSize = settings?.font_size ?? 12
 
     const term = new Terminal({
       cursorBlink: settings?.cursor_blink ?? true,
       cursorStyle: (settings?.cursor_style as any) ?? 'block',
-      fontSize: settings?.font_size ?? 12,
+      fontSize: baseFontSize,
       fontFamily: settings?.font_family ?? "Menlo, Monaco, 'Courier New', monospace",
       theme: TERMINAL_THEME,
       scrollback: settings?.scrollback ?? 5000,
@@ -182,6 +187,65 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       sendToSession(data)
     })
 
+    // ── Copy/Paste shortcuts ──────────────────────────────────────────────
+
+    const handleCopyPaste = (event: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC')
+      const modifier = isMac ? event.metaKey : event.ctrlKey
+
+      if (modifier && event.key === 'c' && term.hasSelection()) {
+        event.preventDefault()
+        const selection = term.getSelection()
+        if (selection) {
+          navigator.clipboard.writeText(selection).catch(() => {})
+        }
+        return
+      }
+
+      if (modifier && event.key === 'v') {
+        event.preventDefault()
+        navigator.clipboard.readText().then(text => {
+          if (text) {
+            sendToSession(text)
+          }
+        }).catch(() => {})
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleCopyPaste)
+
+    // ── Handle copy/paste events from context menu ────────────────────────
+
+    const handleCopyEvent = (event: ClipboardEvent) => {
+      const selection = term.getSelection()
+      if (selection) {
+        event.preventDefault()
+        event.clipboardData?.setData('text/plain', selection)
+      }
+    }
+
+    const handlePasteEvent = (event: ClipboardEvent) => {
+      event.preventDefault()
+      const text = event.clipboardData?.getData('text')
+      if (text) {
+        sendToSession(text)
+      }
+    }
+
+    // Listen on textarea directly for copy/paste from context menu
+    textarea?.addEventListener('copy', handleCopyEvent)
+    textarea?.addEventListener('paste', handlePasteEvent)
+
+    // ── Auto copy on selection ────────────────────────────────────────────
+
+    term.onSelectionChange(() => {
+      const selection = term.getSelection()
+      if (selection) {
+        navigator.clipboard.writeText(selection).catch(() => {})
+      }
+    })
+
     // ── Resize ────────────────────────────────────────────────────────────
 
     term.onResize(({ cols, rows }) => {
@@ -218,10 +282,14 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
 
     return () => {
       ro.disconnect()
+      window.removeEventListener('keydown', handleCopyPaste)
+      textarea?.removeEventListener('copy', handleCopyEvent)
+      textarea?.removeEventListener('paste', handlePasteEvent)
       textarea?.removeEventListener('keydown', handleKeyDown, true)
       term.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
+      sessionIdRef.current = null
     }
   }, [
     backendSessionId,
@@ -233,6 +301,28 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     settings?.font_size,
     settings?.scrollback,
   ])
+
+  // ── Dynamic font size update on zoom change ──────────────────────────────
+
+  useEffect(() => {
+    const term = xtermRef.current
+    const fitAddon = fitAddonRef.current
+    if (!term || !fitAddon) return
+
+    const baseFontSize = settings?.font_size ?? 12
+    const zoomFactor = typeof appZoom === 'number' && appZoom > 0 ? appZoom : 1
+    const scaledFontSize = Math.max(8, Math.round(baseFontSize * zoomFactor))
+
+    if (term.options.fontSize !== scaledFontSize) {
+      term.options.fontSize = scaledFontSize
+      // Give the terminal a moment to apply the new font size
+      setTimeout(() => {
+        if (termRef.current && termRef.current.clientWidth > 0 && termRef.current.clientHeight > 0) {
+          fitAddon.fit()
+        }
+      }, 10)
+    }
+  }, [appZoom, settings?.font_size])
 
   // Re-fit when the tab becomes visible
   useEffect(() => {

@@ -6,6 +6,7 @@
 }
 
 :root {
+  --app-zoom: 1;
   --color-bg-primary: #1a1035;
   --color-bg-secondary: #251a4a;
   --color-bg-panel: rgba(30, 20, 60, 0.85);
@@ -42,7 +43,7 @@ html, body, #root {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: calc(14px * var(--app-zoom));
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }

@@ -25,6 +25,10 @@ interface AppState {
   // UI state
   bookmarkTabs: BookmarkTab[]
   activeBookmarkTabId: string | null
+  appZoom: number
+  setAppZoom: (zoom: number) => void
+  appZoom: number
+  setAppZoom: (zoom: number) => void
 
   // File manager
   transfers: TransferProgress[]
@@ -266,6 +270,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   bookmarkTabs: [],
   activeBookmarkTabId: null,
+  appZoom: 1,
+  setAppZoom: (zoom: number) => set({ appZoom: zoom }),
   transfers: [],
 
   credentialsModalOpen: false,

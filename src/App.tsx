@@ -45,14 +45,22 @@ export default function App() {
     setActiveSession,
     openSession,
     toggleSideTerminal,
+    appZoom,
+    setAppZoom,
   } = useStore()
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [appZoom, setAppZoom] = useState(getInitialAppZoom)
   const [addingSessionByTab, setAddingSessionByTab] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     loadAll()
+    
+    // Initialize appZoom from localStorage
+    const initialZoom = getInitialAppZoom()
+    if (initialZoom !== 1) {
+      setAppZoom(initialZoom)
+    }
+    
     const unlisten = listen<TransferProgress>('transfer-progress', event => {
       updateTransfer(event.payload)
     })
@@ -62,12 +70,9 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    document.documentElement.style.setProperty('zoom', String(appZoom))
+    // Apply zoom factor as CSS variable for UI scaling
+    document.documentElement.style.setProperty('--app-zoom', String(appZoom))
     window.localStorage.setItem(APP_ZOOM_STORAGE_KEY, String(appZoom))
-
-    return () => {
-      document.documentElement.style.removeProperty('zoom')
-    }
   }, [appZoom])
 
   useEffect(() => {
@@ -84,16 +89,13 @@ export default function App() {
       event.preventDefault()
       event.stopPropagation()
 
-      setAppZoom(currentZoom => {
-        if (isZoomReset) return 1
-        if (isZoomIn) return clampAppZoom(currentZoom + APP_ZOOM_STEP)
-        return clampAppZoom(currentZoom - APP_ZOOM_STEP)
-      })
+      const newZoom = isZoomReset ? 1 : isZoomIn ? clampAppZoom(appZoom + APP_ZOOM_STEP) : clampAppZoom(appZoom - APP_ZOOM_STEP)
+      setAppZoom(newZoom)
     }
 
     window.addEventListener('keydown', handleGlobalZoom, true)
     return () => window.removeEventListener('keydown', handleGlobalZoom, true)
-  }, [])
+  }, [appZoom, setAppZoom])
 
 
 
