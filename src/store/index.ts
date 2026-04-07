@@ -27,8 +27,6 @@ interface AppState {
   activeBookmarkTabId: string | null
   appZoom: number
   setAppZoom: (zoom: number) => void
-  appZoom: number
-  setAppZoom: (zoom: number) => void
 
   // File manager
   transfers: TransferProgress[]
