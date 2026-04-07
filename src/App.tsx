@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Plus, X, Server, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, X, Server, ChevronLeft, ChevronRight, Loader2, PanelRight } from 'lucide-react'
 import logoSrc from './assets/logo.png'
 import { useStore } from './store'
 import { Toolbar } from './components/Toolbar'
@@ -23,13 +23,6 @@ function clampAppZoom(value: number) {
   return Math.min(APP_ZOOM_MAX, Math.max(APP_ZOOM_MIN, Number(value.toFixed(2))))
 }
 
-function getInitialAppZoom() {
-  if (typeof window === 'undefined') return 1
-
-  const storedZoom = Number(window.localStorage.getItem(APP_ZOOM_STORAGE_KEY) ?? '1')
-  return Number.isFinite(storedZoom) ? clampAppZoom(storedZoom) : 1
-}
-
 export default function App() {
   const {
     loadAll,
@@ -51,15 +44,10 @@ export default function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [addingSessionByTab, setAddingSessionByTab] = useState<Record<string, boolean>>({})
+  const [togglingSideTerminal, setTogglingSideTerminal] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     loadAll()
-    
-    // Initialize appZoom from localStorage
-    const initialZoom = getInitialAppZoom()
-    if (initialZoom !== 1) {
-      setAppZoom(initialZoom)
-    }
     
     const unlisten = listen<TransferProgress>('transfer-progress', event => {
       updateTransfer(event.payload)
@@ -89,7 +77,7 @@ export default function App() {
       event.preventDefault()
       event.stopPropagation()
 
-      const newZoom = isZoomReset ? 1 : isZoomIn ? clampAppZoom(appZoom + APP_ZOOM_STEP) : clampAppZoom(appZoom - APP_ZOOM_STEP)
+      const newZoom = isZoomReset ? 0.8 : isZoomIn ? clampAppZoom(appZoom + APP_ZOOM_STEP) : clampAppZoom(appZoom - APP_ZOOM_STEP)
       setAppZoom(newZoom)
     }
 
@@ -128,7 +116,37 @@ export default function App() {
       }, remaining)
     }
   }
+  const handleToggleSideTerminal = async (bookmarkTabId: string, sessionTabId: string) => {
+    const key = `${bookmarkTabId}:${sessionTabId}`
+    if (togglingSideTerminal[key]) return
 
+    const tab = bookmarkTabs.find(t => t.id === bookmarkTabId)
+    const session = tab?.sessions.find(s => s.id === sessionTabId)
+    if (!tab || !session) return
+
+    // 如果已经打开，直接关闭（无需 loading）
+    if (session.sideTerminalOpen) {
+      await toggleSideTerminal(bookmarkTabId, sessionTabId)
+      return
+    }
+
+    // 打开时显示 loading
+    setTogglingSideTerminal(state => ({ ...state, [key]: true }))
+
+    // 让浏览器有机会渲染 loading 状态
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    await new Promise(resolve => requestAnimationFrame(resolve))
+
+    try {
+      await toggleSideTerminal(bookmarkTabId, sessionTabId)
+    } finally {
+      setTogglingSideTerminal(state => {
+        const next = { ...state }
+        delete next[key]
+        return next
+      })
+    }
+  }
   return (
     <div className="app-root">
       <div className="app-container">
@@ -250,7 +268,8 @@ export default function App() {
                   addingSession={Boolean(addingSessionByTab[bookmarkTab.id])}
                   onCloseSession={closeSession}
                   onSetActiveSession={setActiveSession}
-                  onToggleSideTerminal={toggleSideTerminal}
+                  onToggleSideTerminal={handleToggleSideTerminal}
+                  togglingSideTerminal={togglingSideTerminal}
                 />
               ))
             )}
@@ -277,12 +296,7 @@ interface HostTabPanelProps {
   onCloseSession: (bookmarkTabId: string, sessionTabId: string) => void
   onSetActiveSession: (bookmarkTabId: string, sessionTabId: string) => void
   onToggleSideTerminal: (bookmarkTabId: string, sessionTabId: string) => void
-}
-
-interface SessionTabContextMenu {
-  x: number
-  y: number
-  sessionId: string
+  togglingSideTerminal: Record<string, boolean>
 }
 
 function HostTabPanel({
@@ -293,30 +307,18 @@ function HostTabPanel({
   onCloseSession,
   onSetActiveSession,
   onToggleSideTerminal,
+  togglingSideTerminal,
 }: HostTabPanelProps) {
-  const [tabContextMenu, setTabContextMenu] = useState<SessionTabContextMenu | null>(null)
-  const tabContextMenuRef = useRef<HTMLDivElement | null>(null)
-
   const handleAddSession = () => {
     if (addingSession) return
     void onAddSession(bookmarkTab.id)
   }
 
-  useEffect(() => {
-    if (!tabContextMenu) return
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (
-        tabContextMenuRef.current &&
-        !tabContextMenuRef.current.contains(event.target as Node)
-      ) {
-        setTabContextMenu(null)
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [tabContextMenu])
+  // 获取当前活动 session
+  const activeSession = bookmarkTab.sessions.find(s => s.id === bookmarkTab.activeSessionId)
+  const hasSideTerminal = activeSession?.sideTerminalOpen || false
+  const sideTerminalKey = activeSession ? `${bookmarkTab.id}:${activeSession.id}` : ''
+  const isTogglingSideTerminal = togglingSideTerminal[sideTerminalKey] || false
 
   return (
     <div
@@ -331,15 +333,6 @@ function HostTabPanel({
               key={session.id}
               className={`session-chrome-tab ${session.id === bookmarkTab.activeSessionId ? 'active' : ''} status-${session.status}`}
               onClick={() => onSetActiveSession(bookmarkTab.id, session.id)}
-              onContextMenu={e => {
-                e.preventDefault()
-                e.stopPropagation()
-                setTabContextMenu({
-                  x: e.clientX,
-                  y: e.clientY,
-                  sessionId: session.id,
-                })
-              }}
             >
               <span className="session-chrome-dot" />
               <span className="session-chrome-title">
@@ -357,63 +350,44 @@ function HostTabPanel({
               </button>
             </div>
           ))}
+
+          {/* 加号按钮移到 tabs 内部最后 */}
+          {(bookmarkTab.hostId || bookmarkTab.bookmarkId) && (
+            <button
+              className={`session-tab-new-inline ${addingSession ? 'is-loading' : ''}`}
+              onClick={handleAddSession}
+              disabled={addingSession}
+              title={addingSession ? '正在新建终端...' : '新建终端'}
+            >
+              {addingSession
+                ? <Loader2 size={14} strokeWidth={2.5} />
+                : <Plus size={14} strokeWidth={2.5} />}
+            </button>
+          )}
         </div>
 
-        {(bookmarkTab.hostId || bookmarkTab.bookmarkId) && (
+        {/* 辅助终端按钮 */}
+        {bookmarkTab.sessions.length > 0 && activeSession && (
           <button
-            className={`session-tab-new ${addingSession ? 'is-loading' : ''}`}
-            onClick={handleAddSession}
-            disabled={addingSession}
-            title={addingSession ? '正在新建终端...' : '新建终端'}
+            className={`session-side-terminal-btn ${isTogglingSideTerminal ? 'is-loading' : ''}`}
+            onClick={() => onToggleSideTerminal(bookmarkTab.id, activeSession.id)}
+            disabled={hasSideTerminal || isTogglingSideTerminal}
+            title={
+              isTogglingSideTerminal
+                ? '正在打开辅助终端...'
+                : hasSideTerminal
+                ? '辅助终端已打开'
+                : '打开右侧辅助终端'
+            }
           >
-            {addingSession
+            {isTogglingSideTerminal
               ? <Loader2 size={14} strokeWidth={2.5} />
-              : <Plus size={14} strokeWidth={2.5} />}
+              : <PanelRight size={14} strokeWidth={2.5} />}
           </button>
         )}
       </div>
 
-      {tabContextMenu && (() => {
-        const targetSession = bookmarkTab.sessions.find(s => s.id === tabContextMenu.sessionId)
-        if (!targetSession) return null
 
-        return (
-          <div
-            ref={tabContextMenuRef}
-            className="glass-panel"
-            style={{
-              position: 'fixed',
-              top: tabContextMenu.y + 10,
-              left: tabContextMenu.x + 40,
-              zIndex: 2400,
-              padding: '4px',
-              borderRadius: '10px',
-            }}
-          >
-            <button
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '7px 10px',
-                background: 'transparent',
-                border: 'none',
-                borderRadius: '8px',
-                color: 'var(--color-text-primary)',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-              onClick={() => {
-                onToggleSideTerminal(bookmarkTab.id, targetSession.id)
-                setTabContextMenu(null)
-              }}
-            >
-              {targetSession.sideTerminalOpen ? '关闭右侧辅助终端' : '打开右侧辅助终端'}
-            </button>
-          </div>
-        )
-      })()}
 
       {/* ── Terminal workspace ── */}
       <div className="workspace">

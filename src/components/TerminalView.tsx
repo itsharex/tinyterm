@@ -135,11 +135,13 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     sessionIdRef.current = sessionId
 
     const baseFontSize = settings?.font_size ?? 12
+    const zoomFactor = typeof appZoom === 'number' && appZoom > 0 ? appZoom : 1
+    const initialFontSize = Math.max(8, Math.round(baseFontSize * zoomFactor))
 
     const term = new Terminal({
       cursorBlink: settings?.cursor_blink ?? true,
       cursorStyle: (settings?.cursor_style as any) ?? 'block',
-      fontSize: baseFontSize,
+      fontSize: initialFontSize,
       fontFamily: settings?.font_family ?? "Menlo, Monaco, 'Courier New', monospace",
       theme: TERMINAL_THEME,
       scrollback: settings?.scrollback ?? 5000,

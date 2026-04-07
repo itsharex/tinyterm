@@ -11,6 +11,43 @@ import type {
   TransferProgress,
 } from '../types'
 
+// ── App Zoom Initialization ──────────────────────────────────────────────────
+
+const APP_ZOOM_STORAGE_KEY = 'tinyterm.appZoom'
+const APP_ZOOM_MIN = 0.8
+const APP_ZOOM_MAX = 1.4
+
+function getInitialAppZoom(): number {
+  if (typeof window === 'undefined') return 0.8
+
+  const stored = window.localStorage.getItem(APP_ZOOM_STORAGE_KEY)
+  
+  // 如果没有存储值，使用新的默认值 0.8
+  if (!stored) {
+    window.localStorage.setItem(APP_ZOOM_STORAGE_KEY, '0.8')
+    return 0.8
+  }
+  
+  const storedZoom = Number(stored)
+  
+  // 如果是旧的默认值 1（允许一些浮点误差），迁移到新的默认值 0.8
+  if (Number.isFinite(storedZoom) && storedZoom >= 0.95 && storedZoom <= 1.05) {
+    window.localStorage.setItem(APP_ZOOM_STORAGE_KEY, '0.8')
+    return 0.8
+  }
+  
+  if (!Number.isFinite(storedZoom)) return 0.8
+  
+  // 限制在范围内
+  return Math.min(APP_ZOOM_MAX, Math.max(APP_ZOOM_MIN, Number(storedZoom.toFixed(2))))
+}
+
+// 立即设置 CSS 变量，确保初始渲染就使用正确的缩放值
+if (typeof window !== 'undefined') {
+  const initialZoom = getInitialAppZoom()
+  document.documentElement.style.setProperty('--app-zoom', String(initialZoom))
+}
+
 interface AppState {
   // Data
   bookmarks: Bookmark[]
@@ -268,7 +305,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   bookmarkTabs: [],
   activeBookmarkTabId: null,
-  appZoom: 1,
+  appZoom: getInitialAppZoom(),
   setAppZoom: (zoom: number) => set({ appZoom: zoom }),
   transfers: [],
 

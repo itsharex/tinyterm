@@ -6,7 +6,7 @@
 }
 
 :root {
-  --app-zoom: 1;
+  --app-zoom: 0.8;
   --color-bg-primary: #1a1035;
   --color-bg-secondary: #251a4a;
   --color-bg-panel: rgba(30, 20, 60, 0.85);

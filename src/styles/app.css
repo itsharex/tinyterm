@@ -457,6 +457,80 @@
   animation: session-add-spin 0.6s linear infinite;
 }
 
+/* New tab button inline (inside tabs scroll) */
+.session-tab-new-inline {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: transparent;
+  border: none;
+  color: rgba(160, 140, 210, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  margin-left: 4px;
+  margin-bottom: 2px;
+}
+
+.session-tab-new-inline:hover {
+  background: rgba(120, 90, 200, 0.2);
+  color: rgba(220, 210, 255, 0.95);
+}
+
+.session-tab-new-inline:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.session-tab-new-inline.is-loading {
+  background: rgba(120, 90, 200, 0.35);
+  color: rgba(220, 210, 255, 0.95);
+}
+
+.session-tab-new-inline.is-loading svg {
+  animation: session-add-spin 0.6s linear infinite;
+}
+
+/* Side terminal toggle button */
+.session-side-terminal-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: transparent;
+  border: none;
+  color: rgba(160, 140, 210, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.session-side-terminal-btn:hover:not(:disabled) {
+  background: rgba(120, 90, 200, 0.2);
+  color: rgba(220, 210, 255, 0.95);
+}
+
+.session-side-terminal-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+  color: rgba(160, 140, 210, 0.4);
+}
+
+.session-side-terminal-btn.is-loading {
+  background: rgba(120, 90, 200, 0.35);
+  color: rgba(220, 210, 255, 0.95);
+  cursor: default;
+}
+
+.session-side-terminal-btn.is-loading svg {
+  animation: session-add-spin 0.6s linear infinite;
+}
+
 @keyframes session-add-spin {
   from {
     transform: rotate(0deg);
