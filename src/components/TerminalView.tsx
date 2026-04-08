@@ -373,13 +373,6 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
 
   return (
     <div className="terminal-wrapper">
-      {session.status === 'connecting' && (
-        <div className="terminal-status connecting">
-          <div className="status-dot connecting" />
-          正在连接 {session.title}...
-        </div>
-      )}
-
       {session.status === 'error' && (
         <div className="terminal-status error">
           <div className="error-header">

@@ -2169,10 +2169,12 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               </div>
             </div>
             <div className="cf-footer">
-              <button className="btn-ghost" onClick={cancelInlineAction}>取消</button>
-              <button className="btn-primary" onClick={submitInlineAction}>
-                {inlineAction.type === 'rename' ? '确定重命名' : '创建'}
-              </button>
+              <div className="app-dialog-btn-group">
+                <button className="btn-ghost" onClick={cancelInlineAction}>取消</button>
+                <button className="btn-primary" onClick={submitInlineAction}>
+                  {inlineAction.type === 'rename' ? '确定重命名' : '创建'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

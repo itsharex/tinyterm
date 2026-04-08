@@ -352,6 +352,28 @@
   user-select: none;
 }
 
+.session-chrome-tab.new-tab {
+  animation: tab-fade-in 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tab-fade-in {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.5;
+  }
+  60% {
+    opacity: 0.7;
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 .session-chrome-tab:hover {
   color: rgba(220, 210, 255, 0.9);
   background: rgba(120, 90, 200, 0.14);
@@ -424,9 +446,9 @@
 
 /* New tab button */
 .session-tab-new {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   background: transparent;
   border: none;
   color: rgba(160, 140, 210, 0.6);
@@ -522,9 +544,10 @@
 }
 
 .session-side-terminal-btn.is-loading {
-  background: rgba(120, 90, 200, 0.35);
   color: rgba(220, 210, 255, 0.95);
   cursor: default;
+  opacity: 1 !important;
+  background: transparent !important;
 }
 
 .session-side-terminal-btn.is-loading svg {
@@ -558,6 +581,14 @@
   border-top: none;
   display: flex;
   flex-direction: column;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.terminal-area.hidden {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
 }
 
 .terminal-inner {

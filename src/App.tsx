@@ -45,6 +45,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [addingSessionByTab, setAddingSessionByTab] = useState<Record<string, boolean>>({})
   const [togglingSideTerminal, setTogglingSideTerminal] = useState<Record<string, boolean>>({})
+  const [newSessionIds, setNewSessionIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadAll()
@@ -104,6 +105,23 @@ export default function App() {
 
     try {
       await openSession(hostId, bookmarkTabId)
+      
+      // Mark the new session for animation
+      // Get fresh state after openSession completes
+      const currentTabs = useStore.getState().bookmarkTabs
+      const updatedTab = currentTabs.find(t => t.id === bookmarkTabId)
+      const newSessionId = updatedTab?.activeSessionId
+      if (newSessionId) {
+        setNewSessionIds(prev => new Set(prev).add(newSessionId))
+        // Remove after animation completes
+        setTimeout(() => {
+          setNewSessionIds(prev => {
+            const next = new Set(prev)
+            next.delete(newSessionId)
+            return next
+          })
+        }, 1600) // Slightly longer than animation duration
+      }
     } finally {
       const elapsed = performance.now() - startedAt
       const remaining = Math.max(0, ADD_SESSION_MIN_LOADING_MS - elapsed)
@@ -270,6 +288,7 @@ export default function App() {
                   onSetActiveSession={setActiveSession}
                   onToggleSideTerminal={handleToggleSideTerminal}
                   togglingSideTerminal={togglingSideTerminal}
+                  newSessionIds={newSessionIds}
                 />
               ))
             )}
@@ -297,6 +316,7 @@ interface HostTabPanelProps {
   onSetActiveSession: (bookmarkTabId: string, sessionTabId: string) => void
   onToggleSideTerminal: (bookmarkTabId: string, sessionTabId: string) => void
   togglingSideTerminal: Record<string, boolean>
+  newSessionIds: Set<string>
 }
 
 function HostTabPanel({
@@ -308,6 +328,7 @@ function HostTabPanel({
   onSetActiveSession,
   onToggleSideTerminal,
   togglingSideTerminal,
+  newSessionIds,
 }: HostTabPanelProps) {
   const handleAddSession = () => {
     if (addingSession) return
@@ -331,7 +352,7 @@ function HostTabPanel({
           {bookmarkTab.sessions.map((session, index) => (
             <div
               key={session.id}
-              className={`session-chrome-tab ${session.id === bookmarkTab.activeSessionId ? 'active' : ''} status-${session.status}`}
+              className={`session-chrome-tab ${session.id === bookmarkTab.activeSessionId ? 'active' : ''} status-${session.status} ${newSessionIds.has(session.id) ? 'new-tab' : ''}`}
               onClick={() => onSetActiveSession(bookmarkTab.id, session.id)}
             >
               <span className="session-chrome-dot" />
@@ -421,10 +442,7 @@ function HostTabPanel({
           bookmarkTab.sessions.map(session => (
             <div
               key={session.id}
-              className="terminal-area glass-panel"
-              style={{
-                display: session.id === bookmarkTab.activeSessionId ? 'flex' : 'none',
-              }}
+              className={`terminal-area glass-panel ${session.id === bookmarkTab.activeSessionId ? '' : 'hidden'}`}
             >
               <div
                 className="terminal-inner"
