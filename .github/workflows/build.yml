@@ -86,6 +86,8 @@ jobs:
         run: npm ci
 
       - name: Build Tauri app
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
         run: npm run tauri build -- ${{ matrix.args }}
 
       - name: Upload artifacts (macOS)
