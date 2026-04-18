@@ -23,9 +23,9 @@
 .fm-loading-spinner {
   width: 22px;
   height: 22px;
-  border: 2px solid rgba(120, 90, 200, 0.15);
+  border: 2px solid rgba(58, 132, 255, 0.15);
   border-top-color: var(--color-accent);
-  border-right-color: rgba(120, 90, 200, 0.5);
+  border-right-color: rgba(58, 132, 255, 0.5);
   border-radius: 50%;
   animation: fm-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -72,7 +72,7 @@
   cursor: pointer;
   background: rgba(10, 6, 30, 0.75);
   border: none;
-  border-top: 1px solid rgba(120, 90, 200, 0.2);
+  border-top: 1px solid rgba(58, 132, 255, 0.2);
   /* when collapsed: bottom corners match terminal-area; when open: square since content sits above */
   border-radius: 0 0 10px 10px;
   transition: background 0.15s, border-radius 0.15s;
@@ -86,7 +86,7 @@
 }
 
 .fm-bar:hover {
-  background: rgba(120, 90, 200, 0.18);
+  background: rgba(58, 132, 255, 0.18);
 }
 
 .fm-bar-arrow {
@@ -135,7 +135,7 @@
   flex-direction: column;
   height: 260px;
   /* content is above bar (column-reverse), so border goes on the bottom */
-  border-bottom: 1px solid rgba(120, 90, 200, 0.2);
+  border-bottom: 1px solid rgba(58, 132, 255, 0.2);
   border-top: none;
   overflow: hidden;
   /* no extra margin — sits flush against the bar */
@@ -325,8 +325,8 @@
 }
 
 .fm-transfer-btn:hover {
-  background: rgba(120, 90, 200, 0.18);
-  border-color: rgba(140, 110, 220, 0.32);
+  background: rgba(58, 132, 255, 0.18);
+  border-color: rgba(112, 191, 255, 0.34);
 }
 
 .fm-transfer-btn:active {
@@ -336,7 +336,7 @@
 .fm-transfer-btn:focus-visible {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px rgba(120, 90, 200, 0.2);
+  box-shadow: 0 0 0 2px rgba(58, 132, 255, 0.2);
 }
 
 .fm-transfer-btn:disabled {
@@ -348,8 +348,8 @@
 
 .fm-transfer-btn.is-loading {
   opacity: 1;
-  background: rgba(120, 90, 200, 0.16);
-  border-color: rgba(140, 110, 220, 0.28);
+  background: rgba(58, 132, 255, 0.16);
+  border-color: rgba(112, 191, 255, 0.3);
 }
 
 .fm-divider-icon {
@@ -361,9 +361,9 @@
 .fm-transfer-spinner {
   width: 13px;
   height: 13px;
-  border: 1.8px solid rgba(180, 165, 230, 0.25);
-  border-top-color: rgba(232, 224, 255, 0.92);
-  border-right-color: rgba(232, 224, 255, 0.62);
+  border: 1.8px solid rgba(153, 183, 214, 0.25);
+  border-top-color: rgba(228, 240, 255, 0.92);
+  border-right-color: rgba(228, 240, 255, 0.64);
   border-radius: 50%;
   animation: fm-spin 0.65s linear infinite;
 }
@@ -413,7 +413,7 @@
 
 /* Drop target highlight */
 .fm-panel--drop-target {
-  background: rgba(120, 90, 200, 0.12);
+  background: rgba(58, 132, 255, 0.12);
   outline: 2px dashed var(--color-accent);
   outline-offset: -2px;
 }
@@ -494,7 +494,7 @@
 }
 
 .fm-path-display:hover {
-  background: rgba(120, 90, 200, 0.12);
+  background: rgba(58, 132, 255, 0.12);
   color: var(--color-text-secondary);
 }
 
@@ -528,7 +528,7 @@
 }
 
 .fm-list::-webkit-scrollbar-thumb {
-  background: rgba(120, 90, 200, 0.3);
+  background: rgba(58, 132, 255, 0.3);
   border-radius: 2px;
 }
 
@@ -563,22 +563,22 @@
 }
 
 .fm-item:hover {
-  background: rgba(120, 90, 200, 0.12);
+  background: rgba(58, 132, 255, 0.12);
 }
 
 .fm-item--selected {
-  background: rgba(120, 90, 200, 0.22);
-  border-color: rgba(140, 110, 220, 0.7);
-  box-shadow: inset 0 0 0 1px rgba(170, 145, 255, 0.18);
+  background: rgba(58, 132, 255, 0.22);
+  border-color: rgba(112, 191, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(157, 215, 255, 0.2);
 }
 
 .fm-item--selected:hover {
-  background: rgba(120, 90, 200, 0.28);
+  background: rgba(58, 132, 255, 0.28);
 }
 
 /* Drop target when a folder is hovered during drag */
 .fm-item--drop-target {
-  background: rgba(120, 90, 200, 0.25) !important;
+  background: rgba(58, 132, 255, 0.25) !important;
   border-color: var(--color-accent) !important;
 }
 
@@ -598,7 +598,7 @@
 }
 
 .fm-item-icon.dir {
-  color: #5cdbd3;
+  color: #57e3a5;
 }
 
 .fm-item-name {
@@ -613,7 +613,7 @@
 }
 
 .fm-item--selected .fm-item-name {
-  color: #f3ecff;
+  color: #eef7ff;
 }
 
 .fm-list *::selection {
@@ -626,7 +626,7 @@
 
 /* Folders get a slightly brighter name */
 .fm-item:has(.fm-item-icon.dir) .fm-item-name {
-  color: #5cdbd3;
+  color: #57e3a5;
   font-weight: 500;
 }
 
@@ -640,7 +640,7 @@
 }
 
 .fm-item--selected .fm-item-size {
-  color: rgba(243, 236, 255, 0.78);
+  color: rgba(228, 240, 255, 0.82);
 }
 
 /* ── Icon button (shared in panels) ──────────────────────────────────────── */
@@ -661,7 +661,7 @@
 }
 
 .fm-icon-btn:hover {
-  background: rgba(120, 90, 200, 0.2);
+  background: rgba(58, 132, 255, 0.2);
   color: var(--color-text-primary);
 }
 
@@ -698,7 +698,7 @@
 }
 
 .fm-ctx-item:hover {
-  background: rgba(120, 90, 200, 0.2);
+  background: rgba(58, 132, 255, 0.2);
 }
 
 .fm-ctx-item.danger {

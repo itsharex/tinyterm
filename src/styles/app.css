@@ -38,10 +38,10 @@
   width: 200px;
   min-width: 200px;
   flex-shrink: 0;
-  background: rgba(20, 14, 48, 0.55);
+  background: rgba(8, 24, 46, 0.55);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(120, 90, 200, 0.22);
+  border: 1px solid rgba(58, 132, 255, 0.22);
   border-radius: 14px;
   overflow: hidden;
   transition: width 0.22s ease, min-width 0.22s ease;
@@ -69,7 +69,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: rgba(160, 140, 210, 0.4);
+  color: rgba(126, 161, 197, 0.4);
   font-size: 11px;
   text-align: center;
   padding: 0 8px;
@@ -101,7 +101,7 @@
   transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
   white-space: nowrap;
   overflow: hidden;
-  color: rgba(180, 165, 230, 0.7);
+  color: rgba(153, 183, 214, 0.7);
   font-size: 13px;
   font-weight: 500;
   flex-shrink: 0;
@@ -116,12 +116,12 @@
 }
 
 .host-sidebar-tab:hover {
-  background: rgba(120, 90, 200, 0.18);
-  color: rgba(220, 210, 255, 0.95);
+  background: rgba(58, 132, 255, 0.18);
+  color: rgba(228, 240, 255, 0.95);
 }
 
 .host-sidebar-tab.active {
-  background: rgba(120, 90, 200, 0.28);
+  background: rgba(58, 132, 255, 0.28);
   color: #fff;
 }
 
@@ -236,9 +236,9 @@
   padding: 7px 10px;
   border-radius: 8px;
   font-size: 12px;
-  color: rgba(160, 140, 210, 0.6);
+  color: rgba(126, 161, 197, 0.6);
   background: transparent;
-  border: 1px dashed rgba(120, 90, 200, 0.3);
+  border: 1px dashed rgba(58, 132, 255, 0.3);
   cursor: pointer;
   transition: all 0.18s ease;
   margin-top: 6px;
@@ -250,7 +250,7 @@
 .host-sidebar-add:hover {
   color: rgba(200, 185, 255, 0.9);
   border-color: rgba(140, 110, 220, 0.6);
-  background: rgba(120, 90, 200, 0.12);
+  background: rgba(58, 132, 255, 0.12);
 }
 
 /* Sidebar collapse button */
@@ -261,8 +261,8 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: rgba(120, 90, 200, 0.18);
-  border: 1px solid rgba(120, 90, 200, 0.3);
+  background: rgba(58, 132, 255, 0.18);
+  border: 1px solid rgba(58, 132, 255, 0.3);
   color: rgba(180, 160, 230, 0.7);
   display: flex;
   align-items: center;
@@ -278,7 +278,7 @@
 }
 
 .sidebar-collapse-btn:hover {
-  background: rgba(120, 90, 200, 0.32);
+  background: rgba(58, 132, 255, 0.32);
   color: #fff;
   border-color: rgba(160, 130, 240, 0.5);
 }
@@ -291,8 +291,8 @@
   height: 32px;
   border-radius: 8px;
   background: transparent;
-  border: 1px dashed rgba(120, 90, 200, 0.3);
-  color: rgba(160, 140, 210, 0.6);
+  border: 1px dashed rgba(58, 132, 255, 0.3);
+  color: rgba(126, 161, 197, 0.6);
   cursor: pointer;
   transition: all 0.18s ease;
   margin-top: 6px;
@@ -304,7 +304,7 @@
 .host-sidebar-add-icon:hover {
   color: rgba(200, 185, 255, 0.9);
   border-color: rgba(140, 110, 220, 0.6);
-  background: rgba(120, 90, 200, 0.12);
+  background: rgba(58, 132, 255, 0.12);
 }
 
 /* ── Main Content ─────────────────────────────────────────────────────────── */
@@ -336,10 +336,10 @@
   height: 38px;
   padding: 0 4px;
   gap: 2px;
-  background: rgba(16, 10, 40, 0.6);
+  background: rgba(8, 22, 42, 0.64);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(120, 90, 200, 0.22);
+  border: 1px solid rgba(58, 132, 255, 0.22);
   border-bottom: none;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
@@ -374,8 +374,8 @@
   cursor: pointer;
   font-size: 12.5px;
   font-weight: 500;
-  color: rgba(170, 155, 220, 0.65);
-  background: rgba(255, 255, 255, 0.04);
+  color: rgba(154, 183, 212, 0.72);
+  background: rgba(255, 255, 255, 0.03);
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
   overflow: hidden;
@@ -407,16 +407,16 @@
 }
 
 .session-chrome-tab:hover {
-  color: rgba(220, 210, 255, 0.9);
-  background: rgba(120, 90, 200, 0.14);
+  color: rgba(228, 240, 255, 0.9);
+  background: rgba(58, 132, 255, 0.14);
 }
 
 .session-chrome-tab.active {
   color: #fff;
-  background: rgba(20, 13, 52, 0.95);
+  background: rgba(7, 28, 55, 0.96);
   box-shadow:
-    inset 0 1px 0 rgba(160, 130, 240, 0.4),
-    0 -1px 0 0 rgba(120, 90, 200, 0.35);
+    inset 0 1px 0 rgba(112, 191, 255, 0.38),
+    0 -1px 0 0 rgba(58, 132, 255, 0.35);
 }
 
 .session-chrome-dot {
@@ -424,7 +424,7 @@
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: rgba(130, 110, 180, 0.4);
+  background: rgba(94, 140, 190, 0.48);
   transition: background 0.2s;
 }
 
@@ -501,7 +501,7 @@
   border-radius: 50%;
   background: transparent;
   border: none;
-  color: rgba(160, 140, 210, 0.6);
+  color: rgba(146, 181, 214, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -511,8 +511,8 @@
 }
 
 .session-tab-new:hover {
-  background: rgba(120, 90, 200, 0.2);
-  color: rgba(220, 210, 255, 0.95);
+  background: rgba(58, 132, 255, 0.2);
+  color: rgba(228, 240, 255, 0.95);
 }
 
 .session-tab-new:disabled {
@@ -521,8 +521,8 @@
 }
 
 .session-tab-new.is-loading {
-  background: rgba(120, 90, 200, 0.35);
-  color: rgba(220, 210, 255, 0.95);
+  background: rgba(58, 132, 255, 0.35);
+  color: rgba(228, 240, 255, 0.95);
 }
 
 .session-tab-new.is-loading svg {
@@ -536,7 +536,7 @@
   border-radius: 7px;
   background: transparent;
   border: none;
-  color: rgba(160, 140, 210, 0.6);
+  color: rgba(146, 181, 214, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -548,8 +548,8 @@
 }
 
 .session-tab-new-inline:hover {
-  background: rgba(120, 90, 200, 0.2);
-  color: rgba(220, 210, 255, 0.95);
+  background: rgba(58, 132, 255, 0.2);
+  color: rgba(228, 240, 255, 0.95);
 }
 
 .session-tab-new-inline:disabled {
@@ -558,8 +558,8 @@
 }
 
 .session-tab-new-inline.is-loading {
-  background: rgba(120, 90, 200, 0.35);
-  color: rgba(220, 210, 255, 0.95);
+  background: rgba(58, 132, 255, 0.35);
+  color: rgba(228, 240, 255, 0.95);
 }
 
 .session-tab-new-inline.is-loading svg {
@@ -573,7 +573,7 @@
   border-radius: 7px;
   background: transparent;
   border: none;
-  color: rgba(160, 140, 210, 0.7);
+  color: rgba(126, 161, 197, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -583,18 +583,18 @@
 }
 
 .session-side-terminal-btn:hover:not(:disabled) {
-  background: rgba(120, 90, 200, 0.2);
-  color: rgba(220, 210, 255, 0.95);
+  background: rgba(58, 132, 255, 0.2);
+  color: rgba(228, 240, 255, 0.95);
 }
 
 .session-side-terminal-btn:disabled {
   cursor: not-allowed;
   opacity: 0.35;
-  color: rgba(160, 140, 210, 0.4);
+  color: rgba(126, 161, 197, 0.4);
 }
 
 .session-side-terminal-btn.is-loading {
-  color: rgba(220, 210, 255, 0.95);
+  color: rgba(228, 240, 255, 0.95);
   cursor: default;
   opacity: 1 !important;
   background: transparent !important;
@@ -669,11 +669,11 @@
   height: 72px;
   margin: 0 auto 18px;
   border-radius: 50%;
-  border: 2px solid rgba(120, 90, 200, 0.22);
-  background: radial-gradient(circle at center, rgba(120, 90, 200, 0.14), rgba(120, 90, 200, 0.04));
+  border: 2px solid rgba(58, 132, 255, 0.22);
+  background: radial-gradient(circle at center, rgba(58, 132, 255, 0.14), rgba(58, 132, 255, 0.04));
   box-shadow:
-    inset 0 0 20px rgba(120, 90, 200, 0.08),
-    0 0 24px rgba(120, 90, 200, 0.08);
+    inset 0 0 20px rgba(58, 132, 255, 0.08),
+    0 0 24px rgba(58, 132, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -722,11 +722,11 @@
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  border: 2px solid rgba(120, 90, 200, 0.22);
-  background: radial-gradient(circle at center, rgba(120, 90, 200, 0.14), rgba(120, 90, 200, 0.04));
+  border: 2px solid rgba(58, 132, 255, 0.22);
+  background: radial-gradient(circle at center, rgba(58, 132, 255, 0.14), rgba(58, 132, 255, 0.04));
   box-shadow:
-    inset 0 0 20px rgba(120, 90, 200, 0.08),
-    0 0 24px rgba(120, 90, 200, 0.08);
+    inset 0 0 20px rgba(58, 132, 255, 0.08),
+    0 0 24px rgba(58, 132, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -864,7 +864,7 @@
 
 .btn-primary:hover:not(:disabled) {
   background: var(--color-accent-hover);
-  box-shadow: 0 0 14px rgba(130, 100, 220, 0.45);
+  box-shadow: 0 0 14px rgba(72, 161, 255, 0.45);
 }
 
 .btn-primary:active:not(:disabled) {
@@ -891,7 +891,7 @@
 .btn-ghost:hover:not(:disabled) {
   color: var(--color-text-primary);
   border-color: var(--color-border-active);
-  background: rgba(120, 90, 200, 0.12);
+  background: rgba(58, 132, 255, 0.12);
 }
 
 .btn-ghost:disabled {
@@ -915,6 +915,6 @@
 }
 
 .icon-btn:hover {
-  background: rgba(120, 90, 200, 0.22);
+  background: rgba(58, 132, 255, 0.22);
   color: var(--color-text-primary);
 }
