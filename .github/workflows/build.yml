@@ -27,7 +27,7 @@ jobs:
             target: 'x86_64-apple-darwin'
             artifact: 'macos-x86_64'
           - platform: 'ubuntu-22.04'
-            args: ''
+            args: '--bundles deb,rpm'
             target: ''
             artifact: 'linux-x86_64'
           - platform: 'windows-latest'
@@ -106,7 +106,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/rpm/*.rpm
 
       - name: Upload artifacts (Windows)
         if: matrix.platform == 'windows-latest'
