@@ -565,7 +565,6 @@ function HostTabPanel({
                 <div style={{ flex: session.sideTerminalOpen ? '1 1 50%' : '1 1 100%', minWidth: 0, minHeight: 0 }}>
                   <TerminalView
                     session={session}
-                    bookmarkTabId={bookmarkTab.id}
                     isVisible={session.id === bookmarkTab.activeSessionId && isActive}
                   />
                 </div>
@@ -596,7 +595,6 @@ function HostTabPanel({
                     </button>
                     <TerminalView
                       session={session}
-                      bookmarkTabId={bookmarkTab.id}
                       backendSessionId={session.sideTerminalSessionId}
                       isVisible={session.id === bookmarkTab.activeSessionId && isActive}
                     />

@@ -98,12 +98,11 @@ function encodeKeyEvent(event: KeyboardEvent): string | null {
 
 interface Props {
   session: SessionTab
-  bookmarkTabId: string
   isVisible: boolean
   backendSessionId?: string
 }
 
-export function TerminalView({ session, bookmarkTabId, isVisible, backendSessionId }: Props) {
+export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const termRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
