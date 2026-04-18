@@ -98,11 +98,12 @@ function encodeKeyEvent(event: KeyboardEvent): string | null {
 
 interface Props {
   session: SessionTab
+  bookmarkTabId: string
   isVisible: boolean
   backendSessionId?: string
 }
 
-export function TerminalView({ session, isVisible, backendSessionId }: Props) {
+export function TerminalView({ session, bookmarkTabId, isVisible, backendSessionId }: Props) {
   const termRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -110,8 +111,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const sessionIdRef = useRef<string | null>(null)
 
   const settings = useStore(s => s.settings)
-  const activeBookmarkTabId = useStore(s => s.activeBookmarkTabId)
-  const reconnectSession = useStore(s => s.reconnectSession)
+  const reconnectHostSessions = useStore(s => s.reconnectHostSessions)
   const appZoom = useStore(s => s.appZoom)
 
   const [passwordInput, setPasswordInput] = useState('')
@@ -355,14 +355,9 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   // ── Reconnect handling ────────────────────────────────────────────────────
 
   const handleReconnect = async () => {
-    if (!activeBookmarkTabId) return
     setReconnecting(true)
     try {
-      await reconnectSession(
-        activeBookmarkTabId,
-        session.id,
-        isAuthError ? passwordInput : undefined,
-      )
+      await reconnectHostSessions(session.bookmarkId, isAuthError ? passwordInput : undefined)
     } finally {
       setReconnecting(false)
       setPasswordInput('')
@@ -373,15 +368,15 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
 
   return (
     <div className="terminal-wrapper">
-      {session.status === 'error' && (
-        <div className="terminal-status error">
+      {(session.status === 'error' || session.status === 'disconnected') && (
+        <div className={`terminal-status ${session.status === 'disconnected' ? 'disconnected' : 'error'}`}>
           <div className="error-header">
             <span className="error-icon">⚠</span>
-            <span>连接失败</span>
+            <span>{session.status === 'disconnected' ? '连接已断开' : '连接失败'}</span>
           </div>
           <div className="error-detail">{session.error}</div>
 
-          {isAuthError && (
+          {isAuthError && session.status === 'error' && (
             <div className="reconnect-form">
               <input
                 type="password"

@@ -1,8 +1,10 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
+use std::time::Duration;
 use tauri::State;
 use uuid::Uuid;
 use log::{info, warn};
@@ -434,6 +436,63 @@ pub fn close_session(
         warn!("close_session ignored missing session_id={}", session_id);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn check_session_alive(
+    session_manager: State<SessionManager>,
+    session_id: String,
+) -> Result<bool, String> {
+    let (session_arc, channel_arc) = {
+        let sessions = session_manager.sessions.lock();
+        let s = match sessions.get(&session_id) {
+            Some(s) => s,
+            None => return Ok(false),
+        };
+        (Arc::clone(&s.session), Arc::clone(&s.channel))
+    };
+
+    let sess = session_arc.lock();
+    if !sess.authenticated() {
+        return Ok(false);
+    }
+
+    if sess.keepalive_send().is_err() {
+        return Ok(false);
+    }
+
+    let channel = channel_arc.lock();
+    if channel.eof() {
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn check_host_port(host: String, port: u16) -> Result<bool, String> {
+    let host = host.trim();
+    if host.is_empty() || port == 0 {
+        return Ok(false);
+    }
+
+    let addrs: Vec<std::net::SocketAddr> = (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("resolve {}:{} failed: {}", host, port, e))?
+        .collect();
+
+    if addrs.is_empty() {
+        return Ok(false);
+    }
+
+    let timeout = Duration::from_millis(1500);
+    for addr in addrs {
+        if TcpStream::connect_timeout(&addr, timeout).is_ok() {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// Write keyboard input to the PTY channel.

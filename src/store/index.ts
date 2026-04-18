@@ -5,6 +5,7 @@ import type {
   Bookmark,
   BookmarkGroup,
   BookmarkTab,
+  HostReachabilityStatus,
   Profile,
   SessionTab,
   Settings,
@@ -62,6 +63,7 @@ interface AppState {
   // UI state
   bookmarkTabs: BookmarkTab[]
   activeBookmarkTabId: string | null
+  hostReachabilityById: Record<string, HostReachabilityStatus>
   appZoom: number
   setAppZoom: (zoom: number) => void
 
@@ -106,10 +108,14 @@ interface AppState {
   openSession: (hostId: string, bookmarkTabId?: string) => Promise<void>
   closeSession: (bookmarkTabId: string, sessionTabId: string) => Promise<void>
   setActiveSession: (bookmarkTabId: string, sessionTabId: string) => void
+  markSessionDisconnected: (bookmarkTabId: string, sessionTabId: string, reason?: string) => Promise<void>
+  markHostSessionsDisconnected: (hostId: string, reason?: string) => Promise<void>
   reconnectSession: (bookmarkTabId: string, sessionTabId: string, password?: string) => Promise<void>
+  reconnectHostSessions: (hostId: string, password?: string) => Promise<void>
   updateSessionPath: (bookmarkTabId: string, sessionId: string, path: string) => void
   toggleFm: (bookmarkTabId: string, sessionId: string) => void
   toggleSideTerminal: (bookmarkTabId: string, sessionTabId: string) => Promise<void>
+  setHostReachability: (hostId: string, status: HostReachabilityStatus) => void
 
   // Modal controls
   openCredentialsModal: () => void
@@ -305,6 +311,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   bookmarkTabs: [],
   activeBookmarkTabId: null,
+  hostReachabilityById: {},
   appZoom: getInitialAppZoom(),
   setAppZoom: (zoom: number) => set({ appZoom: zoom }),
   transfers: [],
@@ -333,7 +340,17 @@ export const useStore = create<AppState>((set, get) => ({
       } catch {
         // command may not exist in all builds
       }
-      set({ bookmarks, bookmarkGroups, hosts: bookmarks })
+      set(state => {
+        const nextReachability = { ...state.hostReachabilityById }
+        const bookmarkIds = new Set(bookmarks.map(b => b.id))
+        Object.keys(nextReachability).forEach(id => {
+          if (!bookmarkIds.has(id)) {
+            delete nextReachability[id]
+          }
+        })
+
+        return { bookmarks, bookmarkGroups, hosts: bookmarks, hostReachabilityById: nextReachability }
+      })
     } catch (e) {
       console.error('loadBookmarks:', e)
     }
@@ -395,6 +412,9 @@ export const useStore = create<AppState>((set, get) => ({
     set(state => ({
       bookmarks: state.bookmarks.filter(b => b.id !== id),
       hosts: state.hosts.filter(b => b.id !== id),
+      hostReachabilityById: Object.fromEntries(
+        Object.entries(state.hostReachabilityById).filter(([key]) => key !== id)
+      ),
     }))
   },
 
@@ -663,6 +683,67 @@ export const useStore = create<AppState>((set, get) => ({
     }))
   },
 
+  markSessionDisconnected: async (bookmarkTabId, sessionTabId, reason) => {
+    const { bookmarkTabs } = get()
+    const tab = bookmarkTabs.find(t => t.id === bookmarkTabId)
+    const session = tab?.sessions.find(s => s.id === sessionTabId)
+    if (!session) return
+
+    if (session.sessionId) {
+      try {
+        await invoke('close_session', { sessionId: session.sessionId })
+      } catch {
+        // Ignore close errors; UI state still needs to move to disconnected.
+      }
+    }
+
+    if (session.sideTerminalSessionId) {
+      try {
+        await invoke('close_session', { sessionId: session.sideTerminalSessionId })
+      } catch {
+        // Ignore close errors for side terminal as well.
+      }
+    }
+
+    set(state => ({
+      bookmarkTabs: state.bookmarkTabs.map(t =>
+        t.id !== bookmarkTabId ? t : {
+          ...t,
+          sessions: t.sessions.map(s =>
+            s.id !== sessionTabId ? s : {
+              ...s,
+              status: 'disconnected',
+              error: reason ?? '连接已断开，请点击重连。',
+              sideTerminalOpen: false,
+              sideTerminalSessionId: undefined,
+              sideTerminalStatus: 'disconnected',
+              sideTerminalError: undefined,
+            }
+          ),
+        }
+      ),
+    }))
+  },
+
+  markHostSessionsDisconnected: async (hostId, reason) => {
+    const { bookmarkTabs } = get()
+    const targets: Array<{ bookmarkTabId: string; sessionTabId: string }> = []
+
+    bookmarkTabs.forEach(tab => {
+      const tabHostId = tab.hostId || tab.bookmarkId
+      if (tabHostId !== hostId) return
+
+      tab.sessions.forEach(session => {
+        if (session.status === 'disconnected') return
+        targets.push({ bookmarkTabId: tab.id, sessionTabId: session.id })
+      })
+    })
+
+    for (const target of targets) {
+      await get().markSessionDisconnected(target.bookmarkTabId, target.sessionTabId, reason)
+    }
+  },
+
   reconnectSession: async (bookmarkTabId, sessionTabId, password) => {
     const { bookmarkTabs } = get()
     const tab = bookmarkTabs.find(t => t.id === bookmarkTabId)
@@ -721,6 +802,36 @@ export const useStore = create<AppState>((set, get) => ({
           }
         ),
       }))
+    }
+  },
+
+  reconnectHostSessions: async (hostId, password) => {
+    const { bookmarkTabs } = get()
+    const targets: Array<{ bookmarkTabId: string; sessionTabId: string }> = []
+
+    bookmarkTabs.forEach(tab => {
+      const tabHostId = tab.hostId || tab.bookmarkId
+      if (tabHostId !== hostId) return
+
+      tab.sessions.forEach(session => {
+        if (session.status !== 'disconnected' && session.status !== 'error') return
+        targets.push({ bookmarkTabId: tab.id, sessionTabId: session.id })
+      })
+    })
+
+    let hasConnectedSession = false
+    for (const target of targets) {
+      await get().reconnectSession(target.bookmarkTabId, target.sessionTabId, password)
+      const refreshed = get().bookmarkTabs
+        .find(tab => tab.id === target.bookmarkTabId)
+        ?.sessions.find(session => session.id === target.sessionTabId)
+      if (refreshed?.status === 'connected') {
+        hasConnectedSession = true
+      }
+    }
+
+    if (hasConnectedSession) {
+      get().setHostReachability(hostId, 'reachable')
     }
   },
 
@@ -847,6 +958,21 @@ export const useStore = create<AppState>((set, get) => ({
       }))
     }
   },
+
+  setHostReachability: (hostId, status) => {
+    set(state => {
+      if (state.hostReachabilityById[hostId] === status) {
+        return state
+      }
+      return {
+        hostReachabilityById: {
+          ...state.hostReachabilityById,
+          [hostId]: status,
+        },
+      }
+    })
+  },
+
   openCredentialsModal: () => set({ credentialsModalOpen: true }),
   closeCredentialsModal: () => set({ credentialsModalOpen: false }),
   openHostsModal: () => set({ hostsModalOpen: true }),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, X, Server, ChevronLeft, ChevronRight, Loader2, PanelRight } from 'lucide-react'
 import logoSrc from './assets/logo.png'
 import { useStore } from './store'
@@ -10,6 +10,7 @@ import { HostsModal } from './components/HostsModal'
 import { AppDialogHost } from './components/AppDialogHost'
 
 import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 import type { TransferProgress, BookmarkTab } from './types'
 import './styles/app.css'
 
@@ -18,6 +19,7 @@ const APP_ZOOM_STEP = 0.1
 const APP_ZOOM_MIN = 0.8
 const APP_ZOOM_MAX = 1.4
 const ADD_SESSION_MIN_LOADING_MS = 600
+const CONNECTION_CHECK_INTERVAL_MS = 15000
 
 function clampAppZoom(value: number) {
   return Math.min(APP_ZOOM_MAX, Math.max(APP_ZOOM_MIN, Number(value.toFixed(2))))
@@ -38,6 +40,10 @@ export default function App() {
     setActiveSession,
     openSession,
     toggleSideTerminal,
+    markHostSessionsDisconnected,
+    reconnectHostSessions,
+    hostReachabilityById,
+    setHostReachability,
     appZoom,
     setAppZoom,
   } = useStore()
@@ -46,6 +52,10 @@ export default function App() {
   const [addingSessionByTab, setAddingSessionByTab] = useState<Record<string, boolean>>({})
   const [togglingSideTerminal, setTogglingSideTerminal] = useState<Record<string, boolean>>({})
   const [newSessionIds, setNewSessionIds] = useState<Set<string>>(new Set())
+  const [hostPingFlashIds, setHostPingFlashIds] = useState<Set<string>>(new Set())
+  const hostFailureCountRef = useRef<Record<string, number>>({})
+  const hostPingFlashTimeoutRef = useRef<number | null>(null)
+  const reconnectingHostIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     loadAll()
@@ -85,6 +95,102 @@ export default function App() {
     window.addEventListener('keydown', handleGlobalZoom, true)
     return () => window.removeEventListener('keydown', handleGlobalZoom, true)
   }, [appZoom, setAppZoom])
+
+  useEffect(() => {
+    let disposed = false
+
+    const runHostPingCheck = async () => {
+      const state = useStore.getState()
+      const openedHostIds = new Set(
+        state.bookmarkTabs
+          .map(tab => tab.hostId || tab.bookmarkId)
+          .filter((id): id is string => Boolean(id))
+      )
+      const targets = Array.from(openedHostIds)
+        .map(id => state.hosts.find(host => host.id === id))
+        .filter((host): host is (typeof state.hosts)[number] => Boolean(host))
+        .map(host => ({ id: host.id, host: host.host, port: host.port }))
+      const activeHostIds = new Set(targets.map(t => t.id))
+      const tickFlashIds: string[] = []
+
+      Object.keys(hostFailureCountRef.current).forEach(id => {
+        if (!activeHostIds.has(id)) {
+          delete hostFailureCountRef.current[id]
+        }
+      })
+
+      await Promise.all(targets.map(async target => {
+        let reachable = false
+        try {
+          reachable = await invoke<boolean>('check_host_port', { host: target.host, port: target.port })
+        } catch {
+          reachable = false
+        }
+
+        if (disposed) return
+
+        if (reachable) {
+          hostFailureCountRef.current[target.id] = 0
+          setHostReachability(target.id, 'reachable')
+          tickFlashIds.push(target.id)
+
+          const hasReconnectableSessions = state.bookmarkTabs.some(tab => {
+            const tabHostId = tab.hostId || tab.bookmarkId
+            if (tabHostId !== target.id) return false
+            return tab.sessions.some(session => session.status === 'disconnected' || session.status === 'error')
+          })
+
+          if (hasReconnectableSessions && !reconnectingHostIdsRef.current.has(target.id)) {
+            reconnectingHostIdsRef.current.add(target.id)
+            try {
+              await reconnectHostSessions(target.id)
+            } finally {
+              reconnectingHostIdsRef.current.delete(target.id)
+            }
+          }
+          return
+        }
+
+        const nextFailCount = (hostFailureCountRef.current[target.id] ?? 0) + 1
+        hostFailureCountRef.current[target.id] = nextFailCount
+        const isAlreadyUnreachable = (state.hostReachabilityById[target.id] ?? 'unknown') === 'unreachable'
+
+        if (nextFailCount >= 2) {
+          setHostReachability(target.id, 'unreachable')
+          if (!isAlreadyUnreachable) {
+            await markHostSessionsDisconnected(target.id, 'SSH 端口检测连续失败 2 次，连接已断开。')
+          }
+        }
+      }))
+
+      if (disposed) return
+      if (hostPingFlashTimeoutRef.current !== null) {
+        window.clearTimeout(hostPingFlashTimeoutRef.current)
+      }
+      setHostPingFlashIds(new Set(tickFlashIds))
+      hostPingFlashTimeoutRef.current = window.setTimeout(() => {
+        setHostPingFlashIds(new Set())
+        hostPingFlashTimeoutRef.current = null
+      }, 420)
+    }
+
+    const runChecks = async () => {
+      await runHostPingCheck()
+    }
+
+    void runChecks()
+    const timer = window.setInterval(() => {
+      void runChecks()
+    }, CONNECTION_CHECK_INTERVAL_MS)
+
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+      if (hostPingFlashTimeoutRef.current !== null) {
+        window.clearTimeout(hostPingFlashTimeoutRef.current)
+      }
+    }
+  }, [markHostSessionsDisconnected, reconnectHostSessions, setHostReachability])
 
 
 
@@ -188,21 +294,25 @@ export default function App() {
                     const sessionStatus = tab.sessions.find(
                       s => s.id === tab.activeSessionId
                     )?.status ?? 'idle'
+                    const hostId = tab.hostId || tab.bookmarkId
+                    const hostReachability = hostId ? (hostReachabilityById[hostId] ?? 'unknown') : 'unknown'
+                    const isHostUnreachable = hostReachability === 'unreachable'
+                    const isPingTickFlash = hostId ? hostPingFlashIds.has(hostId) : false
                     const hostColor =
-                      tab.hostId || tab.bookmarkId
-                        ? (useStore.getState().hosts.find(h => h.id === (tab.hostId || tab.bookmarkId))?.color ?? '#7c5cbf')
+                      hostId
+                        ? (useStore.getState().hosts.find(h => h.id === hostId)?.color ?? '#7c5cbf')
                         : '#7c5cbf'
                     return (
                       <div
                         key={tab.id}
-                        className={`host-sidebar-tab ${tab.id === activeBookmarkTabId ? 'active' : ''}`}
+                        className={`host-sidebar-tab ${tab.id === activeBookmarkTabId ? 'active' : ''} ${isHostUnreachable ? 'host-unreachable' : ''}`}
                         onClick={() => setActiveBookmarkTab(tab.id)}
                         title={tab.title}
                         style={{
                           ['--host-accent' as any]: hostColor,
                         }}
                       >
-                        <span className={`host-dot status-${sessionStatus}`} />
+                        <span className={`host-dot status-${sessionStatus} ${isHostUnreachable ? 'ping-unreachable' : ''} ${isPingTickFlash ? 'ping-check-flash' : ''}`} />
                         {!sidebarCollapsed && (
                           <span className="host-sidebar-tab-title">{tab.title}</span>
                         )}
@@ -455,6 +565,7 @@ function HostTabPanel({
                 <div style={{ flex: session.sideTerminalOpen ? '1 1 50%' : '1 1 100%', minWidth: 0, minHeight: 0 }}>
                   <TerminalView
                     session={session}
+                    bookmarkTabId={bookmarkTab.id}
                     isVisible={session.id === bookmarkTab.activeSessionId && isActive}
                   />
                 </div>
@@ -485,6 +596,7 @@ function HostTabPanel({
                     </button>
                     <TerminalView
                       session={session}
+                      bookmarkTabId={bookmarkTab.id}
                       backendSessionId={session.sideTerminalSessionId}
                       isVisible={session.id === bookmarkTab.activeSessionId && isActive}
                     />

@@ -160,6 +160,38 @@
   background: var(--color-error);
 }
 
+.host-sidebar-tab.host-unreachable {
+  opacity: 0.58;
+  filter: saturate(0.4);
+}
+
+.host-dot.ping-unreachable {
+  background: rgba(152, 152, 164, 0.8);
+  box-shadow: none;
+  animation: none;
+}
+
+.host-dot.ping-check-flash:not(.ping-unreachable) {
+  animation: host-ping-heartbeat 0.42s ease-out;
+}
+
+@keyframes host-ping-heartbeat {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 5px var(--color-success);
+  }
+  45% {
+    transform: scale(1.6);
+    box-shadow: 0 0 14px var(--color-success);
+    filter: brightness(1.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 5px var(--color-success);
+    filter: brightness(1);
+  }
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
@@ -408,6 +440,24 @@
 
 .session-chrome-tab.status-error .session-chrome-dot {
   background: var(--color-error);
+}
+
+.session-chrome-tab.status-disconnected {
+  color: rgba(156, 156, 170, 0.72);
+  background: rgba(90, 90, 104, 0.2);
+}
+
+.session-chrome-tab.status-disconnected .session-chrome-dot {
+  background: rgba(150, 150, 162, 0.75);
+  box-shadow: none;
+}
+
+.session-chrome-tab.status-disconnected.active {
+  color: rgba(230, 230, 236, 0.92);
+  background: rgba(70, 70, 84, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(186, 186, 196, 0.25),
+    0 -1px 0 0 rgba(126, 126, 136, 0.2);
 }
 
 .session-chrome-title {

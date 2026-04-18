@@ -46,12 +46,14 @@ pub fn run() {
             // SSH/Terminal session commands
             commands::ssh::create_session,
             commands::ssh::close_session,
+            commands::ssh::check_session_alive,
             commands::ssh::write_to_session,
             commands::ssh::resize_terminal,
             commands::ssh::subscribe_session,
             commands::ssh::get_remote_cwd,
             commands::ssh::execute_remote_command,
             commands::ssh::trust_host_key,
+            commands::ssh::check_host_port,
             // SFTP commands
             commands::sftp::list_remote_dir,
             commands::sftp::list_local_dir,

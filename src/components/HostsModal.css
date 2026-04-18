@@ -208,6 +208,15 @@
   border-color: rgba(160, 120, 240, 0.4);
 }
 
+.hm-row.is-unreachable {
+  opacity: 0.6;
+  filter: saturate(0.38);
+}
+
+.hm-row.is-unreachable:hover {
+  background: rgba(120, 90, 200, 0.1);
+}
+
 .hm-row-dot {
   width: 10px;
   height: 10px;

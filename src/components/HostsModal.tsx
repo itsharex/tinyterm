@@ -56,6 +56,7 @@ export function HostsModal() {
     hostsModalOpen,
     closeHostsModal,
     hosts,
+    hostReachabilityById,
     credentials,
     createBookmark,
     updateBookmark,
@@ -184,6 +185,7 @@ export function HostsModal() {
                 <HostRow
                   key={h.id}
                   host={h}
+                  unreachable={hostReachabilityById[h.id] === 'unreachable'}
                   credential={cred}
                   connecting={connectingHostId === h.id}
                   onConnect={() => handleConnect(h.id)}
@@ -211,9 +213,10 @@ export function HostsModal() {
 // ── Host Row ──────────────────────────────────────────────────────────────────
 
 function HostRow({
-  host, credential, connecting, onConnect, onEdit, onDelete,
+  host, unreachable, credential, connecting, onConnect, onEdit, onDelete,
 }: {
   host: Bookmark
+  unreachable: boolean
   credential?: Profile
   connecting: boolean
   onConnect: () => Promise<void>
@@ -223,7 +226,7 @@ function HostRow({
   const dot = host.color || '#7c5cbf'
 
   return (
-    <div className="hm-row">
+    <div className={`hm-row ${unreachable ? 'is-unreachable' : ''}`}>
       <span className="hm-row-dot" style={{ background: dot, boxShadow: `0 0 6px ${dot}99` }} />
 
       <div className="hm-row-info">

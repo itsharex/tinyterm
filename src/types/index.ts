@@ -26,6 +26,8 @@ export interface Bookmark {
 // Host is a semantic alias for Bookmark (same fields, same backend table)
 export type Host = Bookmark
 
+export type HostReachabilityStatus = 'unknown' | 'reachable' | 'unreachable'
+
 export interface BookmarkGroup {
   id: string
   title: string

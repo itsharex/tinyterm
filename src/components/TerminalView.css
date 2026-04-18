@@ -44,6 +44,27 @@
   background: rgba(8, 5, 20, 0.9);
 }
 
+.terminal-status.disconnected {
+  color: rgba(216, 216, 226, 0.95);
+  background: rgba(10, 12, 18, 0.78);
+  backdrop-filter: blur(2px) grayscale(0.35);
+  -webkit-backdrop-filter: blur(2px) grayscale(0.35);
+}
+
+.terminal-status.disconnected .error-header {
+  color: rgba(232, 232, 240, 0.92);
+}
+
+.terminal-status.disconnected .reconnect-btn {
+  background: linear-gradient(135deg, rgba(136, 156, 220, 0.34), rgba(118, 132, 188, 0.34));
+  border-color: rgba(188, 202, 252, 0.52);
+}
+
+.terminal-status.disconnected .reconnect-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(152, 170, 232, 0.88), rgba(128, 146, 206, 0.88));
+  border-color: rgba(208, 220, 255, 0.78);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
