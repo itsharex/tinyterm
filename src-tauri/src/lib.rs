@@ -5,7 +5,7 @@ pub mod session;
 pub mod ssh;
 pub mod storage;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, webview::Color};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,7 +20,7 @@ pub fn run() {
                 .resizable(false)
                 .decorations(false)
                 .transparent(true)
-                .shadow(false)
+                .background_color(Color(0, 0, 0, 0))
                 .always_on_top(true)
                 .center()
                 .skip_taskbar(true)
