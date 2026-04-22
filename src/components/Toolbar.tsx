@@ -39,7 +39,7 @@ export function Toolbar() {
       onMouseDown={handleDragStart}
       onDoubleClick={handleDoubleClick}
     >
-      <div className="toolbar-spacer" />
+      <div className="toolbar-spacer toolbar-spacer-left" />
       <div className="toolbar-pill">
         <ToolbarBtn
           icon={<ShieldCheck size={12} strokeWidth={1.9} />}

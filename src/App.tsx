@@ -535,7 +535,7 @@ function HostTabPanel({
                       height: '62%',
                       objectFit: 'contain',
                       opacity: 0.92,
-                      filter: 'drop-shadow(0 0 10px rgba(140, 110, 220, 0.18))',
+                      filter: 'drop-shadow(0 0 10px rgba(80, 150, 255, 0.18))',
                     }}
                   />
                 </div>
@@ -575,7 +575,7 @@ function HostTabPanel({
                       flex: '1 1 50%',
                       minWidth: 0,
                       minHeight: 0,
-                      borderLeft: '1px solid rgba(120, 90, 200, 0.18)',
+                      borderLeft: '1px solid rgba(100, 160, 255, 0.18)',
                       position: 'relative',
                     }}
                   >
@@ -610,9 +610,9 @@ function HostTabPanel({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: 'rgba(200, 190, 240, 0.72)',
+                      color: 'rgba(200, 210, 255, 0.72)',
                       fontSize: '12px',
-                      borderLeft: '1px solid rgba(120, 90, 200, 0.18)',
+                      borderLeft: '1px solid rgba(100, 160, 255, 0.18)',
                     }}
                   >
                     正在打开辅助终端...
@@ -630,7 +630,7 @@ function HostTabPanel({
                       justifyContent: 'center',
                       color: '#ff8f8f',
                       fontSize: '12px',
-                      borderLeft: '1px solid rgba(120, 90, 200, 0.18)',
+                      borderLeft: '1px solid rgba(100, 160, 255, 0.18)',
                       padding: '12px',
                       textAlign: 'center',
                     }}

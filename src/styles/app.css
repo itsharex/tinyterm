@@ -248,8 +248,8 @@
 }
 
 .host-sidebar-add:hover {
-  color: rgba(200, 185, 255, 0.9);
-  border-color: rgba(140, 110, 220, 0.6);
+  color: rgba(200, 210, 255, 0.9);
+  border-color: rgba(100, 160, 255, 0.6);
   background: rgba(58, 132, 255, 0.12);
 }
 
@@ -280,7 +280,7 @@
 .sidebar-collapse-btn:hover {
   background: rgba(58, 132, 255, 0.32);
   color: #fff;
-  border-color: rgba(160, 130, 240, 0.5);
+  border-color: rgba(100, 160, 255, 0.5);
 }
 
 .host-sidebar-add-icon {
@@ -302,8 +302,8 @@
 }
 
 .host-sidebar-add-icon:hover {
-  color: rgba(200, 185, 255, 0.9);
-  border-color: rgba(140, 110, 220, 0.6);
+  color: rgba(200, 210, 255, 0.9);
+  border-color: rgba(100, 160, 255, 0.6);
   background: rgba(58, 132, 255, 0.12);
 }
 
@@ -665,8 +665,8 @@
 }
 
 .empty-icon {
-  width: 72px;
-  height: 72px;
+  width: 120px;
+  height: 120px;
   margin: 0 auto 18px;
   border-radius: 50%;
   border: 2px solid rgba(58, 132, 255, 0.22);
@@ -685,7 +685,7 @@
   height: 62%;
   object-fit: contain;
   opacity: 0.92;
-  filter: drop-shadow(0 0 10px rgba(140, 110, 220, 0.18));
+  filter: drop-shadow(0 0 10px rgba(80, 150, 255, 0.18));
 }
 
 .empty-state-content h2 {
@@ -704,7 +704,7 @@
 }
 
 .empty-state-content strong {
-  color: rgba(190, 175, 240, 0.9);
+  color: rgba(130, 190, 255, 0.95);
 }
 
 /* Empty session (inside terminal area) */
@@ -764,8 +764,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
-    var(--shadow-glow);
+    0 24px 64px rgba(0, 0, 0, 0.55);
   padding: 24px;
   min-width: 480px;
   max-width: 680px;

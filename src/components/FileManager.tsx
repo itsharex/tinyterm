@@ -39,9 +39,9 @@ function getFileColor(name: string): string {
   const map: Record<string, string> = {
     txt: '#a0c0e0', md: '#a0c0e0', json: '#f5c842', js: '#f5c842',
     ts: '#4fc3f7', tsx: '#4fc3f7', jsx: '#4fc3f7', py: '#4caf8a',
-    rs: '#f4732a', go: '#00bcd4', sh: '#ce93d8', bash: '#ce93d8',
+    rs: '#f4732a', go: '#00bcd4', sh: '#70a0ff', bash: '#70a0ff',
     png: '#e57373', jpg: '#e57373', jpeg: '#e57373', gif: '#e57373',
-    svg: '#ffb74d', zip: '#b39ddb', tar: '#b39ddb', gz: '#b39ddb',
+    svg: '#ffb74d', zip: '#70a0ff', tar: '#70a0ff', gz: '#70a0ff',
     pdf: '#ef5350', html: '#ff8a65', css: '#42a5f5',
   }
   return map[ext] ?? '#7a7a9a'

@@ -598,7 +598,7 @@
 }
 
 .fm-item-icon.dir {
-  color: #57e3a5;
+  color: var(--color-accent);
 }
 
 .fm-item-name {
@@ -626,7 +626,7 @@
 
 /* Folders get a slightly brighter name */
 .fm-item:has(.fm-item-icon.dir) .fm-item-name {
-  color: #57e3a5;
+  color: var(--color-accent);
   font-weight: 500;
 }
 
