@@ -26,6 +26,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::app::finish_startup,
             // Bookmark commands
             commands::bookmark::list_bookmarks,
             commands::bookmark::create_bookmark,

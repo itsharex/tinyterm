@@ -20,6 +20,7 @@ const APP_ZOOM_MIN = 0.8
 const APP_ZOOM_MAX = 1.4
 const ADD_SESSION_MIN_LOADING_MS = 600
 const CONNECTION_CHECK_INTERVAL_MS = 15000
+const STARTUP_SPLASH_MIN_MS = 2000
 
 function clampAppZoom(value: number) {
   return Math.min(APP_ZOOM_MAX, Math.max(APP_ZOOM_MIN, Number(value.toFixed(2))))
@@ -56,14 +57,24 @@ export default function App() {
   const hostFailureCountRef = useRef<Record<string, number>>({})
   const hostPingFlashTimeoutRef = useRef<number | null>(null)
   const reconnectingHostIdsRef = useRef<Set<string>>(new Set())
+  const startupFinishedRef = useRef(false)
 
   useEffect(() => {
-    loadAll()
+    const finishStartupTimer = window.setTimeout(() => {
+      if (startupFinishedRef.current) return
+      startupFinishedRef.current = true
+      void invoke('finish_startup')
+    }, STARTUP_SPLASH_MIN_MS)
+
+    void (async () => {
+      await loadAll()
+    })()
     
     const unlisten = listen<TransferProgress>('transfer-progress', event => {
       updateTransfer(event.payload)
     })
     return () => {
+      window.clearTimeout(finishStartupTimer)
       unlisten.then(fn => fn())
     }
   }, [])

@@ -1,3 +1,4 @@
+pub mod app;
 pub mod bookmark;
 pub mod profile;
 pub mod settings;
