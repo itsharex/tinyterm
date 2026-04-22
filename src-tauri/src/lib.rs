@@ -5,40 +5,7 @@ pub mod session;
 pub mod ssh;
 pub mod storage;
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, webview::Color, webview::PageLoadEvent};
-
-const STARTUP_SPLASH_MIN_MS: u64 = 2000;
-
-fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
-    if app.get_webview_window("main").is_some() {
-        return Ok(());
-    }
-
-    let main_window_config = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|window| window.label == "main")
-        .ok_or_else(|| tauri::Error::AssetNotFound("main window config".into()))?;
-
-    WebviewWindowBuilder::from_config(app, main_window_config)?
-        .on_page_load(|window, payload| {
-            if payload.event() != PageLoadEvent::Finished {
-                return;
-            }
-
-            let _ = window.show();
-            let _ = window.set_focus();
-
-            if let Some(splash_window) = window.app_handle().get_webview_window("splash") {
-                let _ = splash_window.close();
-            }
-        })
-        .build()?;
-
-    Ok(())
-}
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,25 +14,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
-                .title("TinyTerm")
-                .inner_size(420.0, 156.0)
-                .resizable(false)
-                .decorations(false)
-                .transparent(true)
-                .background_color(Color(0, 0, 0, 0))
-                .always_on_top(true)
-                .center()
-                .skip_taskbar(true)
-                .build()
-                .expect("failed to create splash window");
-
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(STARTUP_SPLASH_MIN_MS)).await;
-                let _ = create_main_window(&app_handle);
-            });
-
             // Initialize storage
             let app_dir = app.path().app_data_dir().expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");

@@ -12,14 +12,13 @@
     "windows": [
       {
         "label": "main",
-        "create": false,
         "title": "TinyTerm",
         "width": 1100,
         "height": 720,
         "minWidth": 840,
         "minHeight": 540,
         "backgroundColor": "#07162d",
-        "visible": false,
+        "visible": true,
         "decorations": true,
         "transparent": false,
         "resizable": true,
