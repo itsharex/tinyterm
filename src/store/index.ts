@@ -155,6 +155,20 @@ const DEFAULT_SETTINGS: Settings = {
   bell_style: 'none',
 }
 
+function normalizeFontFamily(fontFamily: string | null | undefined): string {
+  const value = (fontFamily ?? '').trim()
+  if (!value) return DEFAULT_SETTINGS.font_family
+
+  if (
+    value === "Menlo, Monaco, Courier New, monospace" ||
+    value === "Menlo,Monaco,Courier New,monospace"
+  ) {
+    return DEFAULT_SETTINGS.font_family
+  }
+
+  return value
+}
+
 type AppDialogState = {
   mode: 'confirm' | 'alert'
   title: string
@@ -265,25 +279,31 @@ async function createSessionWithTrust(bookmarkId: string, cols: number, rows: nu
 }
 
 function normalizeSettings(settings: Settings): Settings {
+  const normalizedFontFamily = normalizeFontFamily(settings.font_family)
+  const normalizedSettings = {
+    ...settings,
+    font_family: normalizedFontFamily,
+  }
+
   const looksLikeLegacyDefaults =
-    (settings.font_size === 14 || settings.font_size === 13) &&
-    settings.font_family === DEFAULT_SETTINGS.font_family &&
-    settings.theme === DEFAULT_SETTINGS.theme &&
-    settings.opacity === DEFAULT_SETTINGS.opacity &&
-    settings.language === DEFAULT_SETTINGS.language &&
-    settings.scrollback === DEFAULT_SETTINGS.scrollback &&
-    settings.show_hidden_files === DEFAULT_SETTINGS.show_hidden_files &&
-    settings.default_protocol === DEFAULT_SETTINGS.default_protocol &&
-    settings.cursor_style === DEFAULT_SETTINGS.cursor_style &&
-    settings.cursor_blink === DEFAULT_SETTINGS.cursor_blink &&
-    settings.bell_style === DEFAULT_SETTINGS.bell_style
+    (normalizedSettings.font_size === 14 || normalizedSettings.font_size === 13) &&
+    normalizedSettings.font_family === DEFAULT_SETTINGS.font_family &&
+    normalizedSettings.theme === DEFAULT_SETTINGS.theme &&
+    normalizedSettings.opacity === DEFAULT_SETTINGS.opacity &&
+    normalizedSettings.language === DEFAULT_SETTINGS.language &&
+    normalizedSettings.scrollback === DEFAULT_SETTINGS.scrollback &&
+    normalizedSettings.show_hidden_files === DEFAULT_SETTINGS.show_hidden_files &&
+    normalizedSettings.default_protocol === DEFAULT_SETTINGS.default_protocol &&
+    normalizedSettings.cursor_style === DEFAULT_SETTINGS.cursor_style &&
+    normalizedSettings.cursor_blink === DEFAULT_SETTINGS.cursor_blink &&
+    normalizedSettings.bell_style === DEFAULT_SETTINGS.bell_style
 
   if (!looksLikeLegacyDefaults) {
-    return settings
+    return normalizedSettings
   }
 
   return {
-    ...settings,
+    ...normalizedSettings,
     font_size: DEFAULT_SETTINGS.font_size,
   }
 }

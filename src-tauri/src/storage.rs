@@ -55,7 +55,7 @@ pub fn init_db(path: &PathBuf) -> Result<()> {
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             font_size INTEGER NOT NULL DEFAULT 12,
-            font_family TEXT NOT NULL DEFAULT 'Menlo, Monaco, Courier New, monospace',
+            font_family TEXT NOT NULL DEFAULT 'Menlo, Monaco, ''Courier New'', monospace',
             theme TEXT NOT NULL DEFAULT 'dark',
             opacity REAL NOT NULL DEFAULT 1.0,
             language TEXT NOT NULL DEFAULT 'zh',

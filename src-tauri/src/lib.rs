@@ -5,7 +5,7 @@ pub mod session;
 pub mod ssh;
 pub mod storage;
 
-use tauri::Manager;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +14,19 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
+                .title("TinyTerm")
+                .inner_size(420.0, 156.0)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .shadow(false)
+                .always_on_top(true)
+                .center()
+                .skip_taskbar(true)
+                .build()
+                .expect("failed to create splash window");
+
             // Initialize storage
             let app_dir = app.path().app_data_dir().expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
