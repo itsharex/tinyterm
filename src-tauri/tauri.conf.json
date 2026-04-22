@@ -12,6 +12,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "TinyTerm",
         "width": 1100,
         "height": 720,

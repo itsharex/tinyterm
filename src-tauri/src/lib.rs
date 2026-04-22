@@ -5,7 +5,40 @@ pub mod session;
 pub mod ssh;
 pub mod storage;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, webview::Color};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, webview::Color, webview::PageLoadEvent};
+
+const STARTUP_SPLASH_MIN_MS: u64 = 2000;
+
+fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window("main").is_some() {
+        return Ok(());
+    }
+
+    let main_window_config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .ok_or_else(|| tauri::Error::AssetNotFound("main window config".into()))?;
+
+    WebviewWindowBuilder::from_config(app, main_window_config)?
+        .on_page_load(|window, payload| {
+            if payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+
+            let _ = window.show();
+            let _ = window.set_focus();
+
+            if let Some(splash_window) = window.app_handle().get_webview_window("splash") {
+                let _ = splash_window.close();
+            }
+        })
+        .build()?;
+
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,6 +60,12 @@ pub fn run() {
                 .build()
                 .expect("failed to create splash window");
 
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(STARTUP_SPLASH_MIN_MS)).await;
+                let _ = create_main_window(&app_handle);
+            });
+
             // Initialize storage
             let app_dir = app.path().app_data_dir().expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
@@ -39,7 +78,6 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::app::finish_startup,
             // Bookmark commands
             commands::bookmark::list_bookmarks,
             commands::bookmark::create_bookmark,
