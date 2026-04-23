@@ -85,10 +85,6 @@
   border-radius: 0;
 }
 
-.fm-bar:hover {
-  background: rgba(58, 132, 255, 0.18);
-}
-
 .fm-bar-arrow {
   color: var(--color-text-muted);
   flex-shrink: 0;

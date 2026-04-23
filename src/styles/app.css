@@ -138,12 +138,18 @@
 }
 
 .host-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
   flex-shrink: 0;
   background: rgba(130, 110, 180, 0.45);
   transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
 }
 
 .host-dot.status-connected {

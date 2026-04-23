@@ -292,7 +292,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="host-sidebar-tabs">
-                  {bookmarkTabs.map(tab => {
+                  {bookmarkTabs.map((tab, index) => {
                     const sessionStatus = tab.sessions.find(
                       s => s.id === tab.activeSessionId
                     )?.status ?? 'idle'
@@ -314,7 +314,7 @@ export default function App() {
                           ['--host-accent' as any]: hostColor,
                         }}
                       >
-                        <span className={`host-dot status-${sessionStatus} ${isHostUnreachable ? 'ping-unreachable' : ''} ${isPingTickFlash ? 'ping-check-flash' : ''}`} />
+                        <span className={`host-dot status-${sessionStatus} ${isHostUnreachable ? 'ping-unreachable' : ''} ${isPingTickFlash ? 'ping-check-flash' : ''}`}>{index + 1}</span>
                         {!sidebarCollapsed && (
                           <span className="host-sidebar-tab-title">{tab.title}</span>
                         )}
