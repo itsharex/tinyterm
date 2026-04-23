@@ -543,6 +543,13 @@
   color: var(--color-text-muted);
 }
 
+.fm-status.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 10px;
+}
+
 /* ── File item ────────────────────────────────────────────────────────────── */
 
 .fm-item {
