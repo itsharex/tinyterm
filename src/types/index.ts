@@ -87,6 +87,8 @@ export interface TransferProgress {
   target_path?: string
   conflict_path?: string
   conflict_is_dir?: boolean
+  session_id?: string   // which session tab this transfer belongs to
+  group_id?: string     // batch group id for multi-file transfers
 }
 
 // A "bookmark tab" is a top-level tab corresponding to a Host

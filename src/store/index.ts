@@ -139,6 +139,7 @@ interface AppState {
 
   // Transfer progress
   updateTransfer: (progress: TransferProgress) => void
+  removeTransfer: (transferId: string) => void
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -682,8 +683,10 @@ export const useStore = create<AppState>((set, get) => ({
         })
         .filter((t): t is BookmarkTab => t !== null)
 
+      const transfers = state.transfers.filter(t => t.session_id !== sessionTabId)
+
       if (!removedTargetTab) {
-        return { bookmarkTabs }
+        return { bookmarkTabs, transfers }
       }
 
       const activeBookmarkTabId =
@@ -691,7 +694,7 @@ export const useStore = create<AppState>((set, get) => ({
           ? bookmarkTabs[bookmarkTabs.length - 1]?.id ?? null
           : state.activeBookmarkTabId
 
-      return { bookmarkTabs, activeBookmarkTabId }
+      return { bookmarkTabs, activeBookmarkTabId, transfers }
     })
   },
 
@@ -1037,6 +1040,12 @@ export const useStore = create<AppState>((set, get) => ({
       }
       return { transfers: [...state.transfers, { ...progress, id: transferId }] }
     })
+  },
+
+  removeTransfer: (transferId) => {
+    set(state => ({
+      transfers: state.transfers.filter(t => (t.id || `${t.direction}:${t.file_name}`) !== transferId),
+    }))
   },
 }))
 

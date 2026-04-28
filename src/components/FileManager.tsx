@@ -332,117 +332,143 @@ function ConfirmDialog({ title, message, onCancel, actions }: ConfirmDialogProps
 }
 
 function TransferQueue({ transfers, onCancel }: { transfers: TransferProgress[]; onCancel: (transferId: string) => void }) {
-  const active = transfers.filter((t: TransferProgress) => t.status !== 'done')
-  if (active.length === 0) return null
-
-  // Packed folder transfers keep transferred_bytes so we can distinguish them from plain file transfers.
-  const activeFolders = active.filter(t => t.transferred_bytes !== undefined)
-  const activeFiles = active.filter(t => t.transferred_bytes === undefined)
-
-  const isFolderOverall = activeFolders.length > 0
-  const topTask = isFolderOverall 
-    ? activeFolders[0] 
-    : (activeFiles.find(t => t.status === 'transferring') || activeFiles[0])
-
-  // If transferring a folder, find which specific internal file is currently flying
-  const subTask = isFolderOverall 
-    ? activeFiles.find(t => t.status === 'transferring' || t.status === 'pending') 
-    : null
-
-  if (!topTask) return null
-
-  const topPercent = topTask.total > 0 ? Math.min(100, Math.round((topTask.transferred / topTask.total) * 100)) : 0
-
-  let topStatusLabel = '传输中'
-  if (topTask.status === 'pending') topStatusLabel = '等待中'
-  else if (topTask.status === 'error') topStatusLabel = topTask.error === '用户取消' || topTask.error === 'Cancelled' ? '已取消' : '失败'
-  else if (topTask.status === 'conflict') topStatusLabel = '冲突'
-
-  // Descriptive badge
-  let badgeText = ''
-  if (isFolderOverall && activeFiles.length > 0) {
-    badgeText = ` 共 ${topTask.total} 项`
-  } else if (activeFiles.length > 1) {
-    badgeText = ` 剩余 ${activeFiles.length - 1} 项`
+  // Group ALL transfers (including done ones) so we can count done items accurately
+  const groups = new Map<string | undefined, TransferProgress[]>()
+  for (const t of transfers) {
+    const gid = t.group_id
+    if (!groups.has(gid)) groups.set(gid, [])
+    groups.get(gid)!.push(t)
   }
 
-  const isErrorState = topTask.status === 'error' || topTask.status === 'conflict'
-  const statusText = isErrorState ? topStatusLabel : `${topStatusLabel} ${topPercent}%`
-  const errorText = topTask.error && topTask.error !== '用户取消' && topTask.error !== 'Cancelled'
-    ? topTask.error
-    : null
+  // Only show groups that still have active (non-done) items
+  const activeGroups = Array.from(groups.entries()).filter(([groupId, items]) => {
+    if (!groupId) return items.some(t => t.status !== 'done')
+    const subItems = items.filter(t => t.id !== groupId)
+    return subItems.some(t => t.status !== 'done')
+  })
+
+  if (activeGroups.length === 0) return null
 
   return (
     <div className="fm-transfer-queue">
-      <div className="fm-transfer-compact">
-        <div className="fm-tc-header">
-          <span className="fm-tc-icon">
-            {topTask.direction === 'upload'
-              ? <ArrowRight size={12} strokeWidth={2.5} />
-              : <ArrowLeft size={12} strokeWidth={2.5} />}
-          </span>
-          <span className="fm-tc-filename" title={topTask.error ? `${topTask.file_name}\n${topTask.error}` : topTask.file_name}>
-            {topTask.file_name}
-          </span>
-          {badgeText && <span className="fm-tc-badge">{badgeText}</span>}
-          <span className="fm-tc-spacer" />
-          <span className="fm-tc-percent" title={topTask.error || statusText}>
-            {statusText}
-          </span>
-          {(topTask.status === 'pending' || topTask.status === 'transferring') && (
-            <button
-              className="fm-tc-cancel"
-              onClick={() => active.forEach(t => onCancel(t.id))}
-              title="全部取消"
-            >
-              <X size={12} strokeWidth={2.5} />
-            </button>
-          )}
-        </div>
-        <div className="fm-tc-track">
-          <div
-            className="fm-tc-fill"
-            style={{
-              width: `${topPercent}%`,
-              background: isErrorState ? 'rgba(220, 50, 50, 0.8)' : 'var(--color-accent)'
-            }}
-          />
-        </div>
+      {activeGroups.map(([groupId, items]) => {
+        if (groupId) {
+          // Batch group — single line with 3 regions
+          // Use ALL sub-items (including done) for accurate counting
+          const subItems = items.filter(t => t.id !== groupId)
+          const transferring = subItems.find(t => t.status === 'transferring')
+          const done = subItems.filter(t => t.status === 'done').length
+          // 待传 = 总数 - 已完成 - 正在传的1个
+          const pending = Math.max(0, subItems.length - done - (transferring ? 1 : 0))
+          const hasError = subItems.some(t => t.status === 'error' || t.status === 'conflict')
+          const current = transferring || subItems.find(t => t.status === 'pending') || subItems[0]
 
-        {errorText && (
-          <div className="fm-tc-error" title={errorText}>
-            {errorText}
-          </div>
-        )}
+          const dir = current?.direction ?? 'upload'
+          const currentPercent = current && current.total > 0
+            ? Math.min(100, Math.round((current.transferred / current.total) * 100))
+            : 0
+          const overallPercent = subItems.length > 0
+            ? Math.min(100, Math.round((done / subItems.length) * 100))
+            : 0
+          const showPercent = transferring ? currentPercent : overallPercent
+          const actionLabel = dir === 'upload' ? '正在上传' : '正在下载'
 
-        {/* Sub-file if transmitting a folder */}
-        {subTask && subTask.file_name !== topTask.file_name && (
-          <div style={{ marginTop: 6 }}>
-            <div className="fm-tc-header" style={{ opacity: 0.7, marginBottom: 3 }}>
-              <span className="fm-tc-icon">
-                 <FileIcon2 size={10} strokeWidth={2.5} />
-              </span>
-              <span className="fm-tc-filename" title={subTask.file_name} style={{ fontSize: 10 }}>
-                {subTask.file_name}
-              </span>
-              <span className="fm-tc-spacer" />
-              <span className="fm-tc-percent" style={{ fontSize: 10 }}>
-                {subTask.total > 0 ? Math.min(100, Math.round((subTask.transferred / subTask.total) * 100)) : 0}%
-              </span>
+          return (
+            <div key={groupId} className="fm-tc-row">
+              {/* Region 1: Currently transferring */}
+              <div className="fm-tc-region fm-tc-region--active">
+                <span className="fm-tc-dir">
+                  {dir === 'upload'
+                    ? <ArrowRight size={12} strokeWidth={2.5} />
+                    : <ArrowLeft size={12} strokeWidth={2.5} />}
+                </span>
+                <span className="fm-tc-action">{actionLabel}:</span>
+                <span className="fm-tc-filename" title={current?.file_name || ''}>
+                  {current?.file_name || '...'}
+                </span>
+                <div className="fm-tc-track">
+                  <div
+                    className="fm-tc-fill"
+                    style={{
+                      width: `${showPercent}%`,
+                      background: hasError ? 'rgba(220, 50, 50, 0.8)' : 'var(--color-accent)'
+                    }}
+                  />
+                </div>
+                <span className="fm-tc-pct">{showPercent}%</span>
+              </div>
+
+              {/* Region 2: Pending */}
+              <div className="fm-tc-region fm-tc-region--pending">
+                <span className="fm-tc-label">待传</span>
+                <span className="fm-tc-count">{pending}</span>
+              </div>
+
+              {/* Region 3: Done */}
+              <div className="fm-tc-region fm-tc-region--done">
+                <span className="fm-tc-label">完成</span>
+                <span className="fm-tc-count">{done}</span>
+              </div>
+
+              {/* Cancel */}
+              <button
+                className="fm-tc-cancel"
+                onClick={() => items.forEach(t => onCancel(t.id))}
+                title="全部取消"
+              >
+                <X size={12} strokeWidth={2.5} />
+              </button>
             </div>
-            <div className="fm-tc-track" style={{ height: 3, background: 'rgba(255, 255, 255, 0.05)' }}>
-              <div
-                className="fm-tc-fill"
-                style={{
-                  width: `${subTask.total > 0 ? Math.min(100, Math.round((subTask.transferred / subTask.total) * 100)) : 0}%`,
-                  background: 'var(--color-accent)',
-                  opacity: 0.6
-                }}
-              />
+          )
+        }
+
+        // Non-grouped items — single line with active region only
+        return items.filter(t => t.status !== 'done').map(item => {
+          const percent = item.total > 0 ? Math.min(100, Math.round((item.transferred / item.total) * 100)) : 0
+          const isError = item.status === 'error' || item.status === 'conflict'
+
+          return (
+            <div key={item.id} className="fm-tc-row">
+              <div className="fm-tc-region fm-tc-region--active">
+                <span className="fm-tc-dir">
+                  {item.direction === 'upload'
+                    ? <ArrowRight size={12} strokeWidth={2.5} />
+                    : <ArrowLeft size={12} strokeWidth={2.5} />}
+                </span>
+                <span className="fm-tc-filename" title={item.error ? `${item.file_name}\n${item.error}` : item.file_name}>
+                  {item.file_name}
+                </span>
+                <div className="fm-tc-track">
+                  <div
+                    className="fm-tc-fill"
+                    style={{
+                      width: `${percent}%`,
+                      background: isError ? 'rgba(220, 50, 50, 0.8)' : 'var(--color-accent)'
+                    }}
+                  />
+                </div>
+                <span className="fm-tc-pct">{percent}%</span>
+              </div>
+
+              {isError && (
+                <span className="fm-tc-error" title={item.error || ''}>
+                  {item.error === '用户取消' || item.error === 'Cancelled' ? '已取消' : '失败'}
+                </span>
+              )}
+
+              {(item.status === 'pending' || item.status === 'transferring') && (
+                <button
+                  className="fm-tc-cancel"
+                  onClick={() => onCancel(item.id)}
+                  title="取消"
+                >
+                  <X size={12} strokeWidth={2.5} />
+                </button>
+              )}
             </div>
-          </div>
-        )}
-      </div>
+          )
+        })
+      })}
     </div>
   )
 }
@@ -490,7 +516,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   const [remoteTarSupport, setRemoteTarSupport] = useState<boolean | null>(null)
   const [remoteTarChecking, setRemoteTarChecking] = useState(false)
 
-  const transfers = useStore(s => s.transfers)
+  const allTransfers = useStore(s => s.transfers)
+  const transfers = useMemo(() => allTransfers.filter(t => t.session_id === session.id), [allTransfers, session.id])
   const updateTransfer = useStore(s => s.updateTransfer)
   const toggleFm = useStore(s => s.toggleFm)
   const updateSessionPath = useStore(s => s.updateSessionPath)
@@ -776,6 +803,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     progressStart?: number
     progressSpan?: number
     displayTargetPath?: string
+    sessionId?: string
+    groupId?: string
   }
 
   const startTransferTask = useCallback((
@@ -800,6 +829,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         transferred: progressStart,
         status: 'pending',
         target_path: displayTargetPath,
+        session_id: options?.sessionId,
+        group_id: options?.groupId,
       })
 
       const unlistenPromise = listen('transfer-progress', (event) => {
@@ -858,6 +889,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
             error: message,
             target_path: displayTargetPath,
             conflict_path: displayTargetPath,
+            session_id: options?.sessionId,
+            group_id: options?.groupId,
           })
           resolve({ transferId, fileName, conflict: true })
         } else {
@@ -870,6 +903,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
             status: 'error',
             error: message,
             target_path: displayTargetPath,
+            session_id: options?.sessionId,
+            group_id: options?.groupId,
           })
           resolve({ transferId, fileName, conflict: false, error: message })
         }
@@ -882,17 +917,39 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     targetRemoteDir: string,
     startIndex = 0,
     overwriteAll = false,
+    groupId?: string,
   ) => {
     if (!session.sessionId || localFilePaths.length === 0) return
 
+    const ownGroup = !groupId && localFilePaths.length > 1
+    const batchGroupId = groupId || (ownGroup ? `batch-upload:${session.id}:${Date.now()}` : undefined)
+
     if (startIndex === 0) {
+      if (batchGroupId && ownGroup) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `上传 ${localFilePaths.length} 项`,
+          direction: 'upload',
+          total: localFilePaths.length,
+          transferred: 0,
+          status: 'pending',
+          target_path: targetRemoteDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
       localFilePaths.forEach(p => {
         const fn = p.split('/').pop() ?? 'file'
         const target = joinPath(targetRemoteDir, fn)
-        updateTransfer({ id: `upload:${target}`, file_name: fn, direction: 'upload', total: 0, transferred: 0, status: 'pending', target_path: target })
+        updateTransfer({
+          id: `upload:${target}`, file_name: fn, direction: 'upload',
+          total: 0, transferred: 0, status: 'pending', target_path: target,
+          session_id: session.id, group_id: batchGroupId,
+        })
       })
     }
 
+    let hasError = false
     for (let index = startIndex; index < localFilePaths.length; index += 1) {
       const localFilePath = localFilePaths[index]
       const fileName = localFilePath.split('/').pop() ?? 'file'
@@ -903,8 +960,12 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         continue // Skip if cancelled
       }
 
-      const result = await startTransferTask('upload', localFilePath, remoteTarget, overwriteAll)
+      const result = await startTransferTask('upload', localFilePath, remoteTarget, overwriteAll, {
+        sessionId: session.id,
+        groupId: batchGroupId,
+      })
       if (result.conflict) {
+        hasError = true
         setTransferConflict({
           transferId: result.transferId,
           direction: 'upload',
@@ -915,27 +976,87 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         })
         return
       }
+      if (result.error) {
+        hasError = true
+      }
+
+      if (ownGroup && batchGroupId) {
+        const current = useStore.getState().transfers.find(t => t.id === batchGroupId)
+        if (current && current.status !== 'error') {
+          updateTransfer({
+            id: batchGroupId,
+            file_name: current.file_name,
+            direction: 'upload',
+            total: localFilePaths.length,
+            transferred: index + 1,
+            status: 'transferring',
+            target_path: targetRemoteDir,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        }
+      }
+    }
+
+    if (ownGroup && batchGroupId) {
+      const current = useStore.getState().transfers.find(t => t.id === batchGroupId)
+      if (current) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: current.file_name,
+          direction: 'upload',
+          total: localFilePaths.length,
+          transferred: localFilePaths.length,
+          status: hasError ? 'error' : 'done',
+          error: hasError ? '部分文件传输失败' : undefined,
+          target_path: targetRemoteDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
     }
 
     await loadRemote(targetRemoteDir)
-  }, [session.sessionId, startTransferTask, loadRemote, updateTransfer])
+  }, [session.sessionId, session.id, startTransferTask, loadRemote, updateTransfer])
 
   const runDownloadQueue = useCallback(async (
     remoteFilePaths: string[],
     targetLocalDir: string,
     startIndex = 0,
     overwriteAll = false,
+    groupId?: string,
   ) => {
     if (!session.sessionId || remoteFilePaths.length === 0) return
 
+    const ownGroup = !groupId && remoteFilePaths.length > 1
+    const batchGroupId = groupId || (ownGroup ? `batch-download:${session.id}:${Date.now()}` : undefined)
+
     if (startIndex === 0) {
+      if (batchGroupId && ownGroup) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `下载 ${remoteFilePaths.length} 项`,
+          direction: 'download',
+          total: remoteFilePaths.length,
+          transferred: 0,
+          status: 'pending',
+          target_path: targetLocalDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
       remoteFilePaths.forEach(p => {
         const fn = p.split('/').pop() ?? 'file'
         const target = joinPath(targetLocalDir, fn)
-        updateTransfer({ id: `download:${target}`, file_name: fn, direction: 'download', total: 0, transferred: 0, status: 'pending', target_path: target })
+        updateTransfer({
+          id: `download:${target}`, file_name: fn, direction: 'download',
+          total: 0, transferred: 0, status: 'pending', target_path: target,
+          session_id: session.id, group_id: batchGroupId,
+        })
       })
     }
 
+    let hasError = false
     for (let index = startIndex; index < remoteFilePaths.length; index += 1) {
       const remoteFilePath = remoteFilePaths[index]
       const fileName = remoteFilePath.split('/').pop() ?? 'file'
@@ -946,8 +1067,12 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         continue // Skip if cancelled
       }
 
-      const result = await startTransferTask('download', remoteFilePath, localTarget, overwriteAll)
+      const result = await startTransferTask('download', remoteFilePath, localTarget, overwriteAll, {
+        sessionId: session.id,
+        groupId: batchGroupId,
+      })
       if (result.conflict) {
+        hasError = true
         setTransferConflict({
           transferId: result.transferId,
           direction: 'download',
@@ -958,10 +1083,48 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         })
         return
       }
+      if (result.error) {
+        hasError = true
+      }
+
+      if (ownGroup && batchGroupId) {
+        const current = useStore.getState().transfers.find(t => t.id === batchGroupId)
+        if (current && current.status !== 'error') {
+          updateTransfer({
+            id: batchGroupId,
+            file_name: current.file_name,
+            direction: 'download',
+            total: remoteFilePaths.length,
+            transferred: index + 1,
+            status: 'transferring',
+            target_path: targetLocalDir,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        }
+      }
+    }
+
+    if (ownGroup && batchGroupId) {
+      const current = useStore.getState().transfers.find(t => t.id === batchGroupId)
+      if (current) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: current.file_name,
+          direction: 'download',
+          total: remoteFilePaths.length,
+          transferred: remoteFilePaths.length,
+          status: hasError ? 'error' : 'done',
+          error: hasError ? '部分文件传输失败' : undefined,
+          target_path: targetLocalDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
     }
 
     await loadLocal(targetLocalDir)
-  }, [session.sessionId, startTransferTask, loadLocal, updateTransfer])
+  }, [session.sessionId, session.id, startTransferTask, loadLocal, updateTransfer])
 
   const waitForStageProgress = useCallback((
     transferId: string,
@@ -1056,6 +1219,24 @@ export function FileManager({ session, bookmarkTabId }: Props) {
   const doUpload = useCallback(async (localItems: FileInfo[], targetRemoteDir: string, overwriteAll = false) => {
     if (!session.sessionId) return
 
+    const batchGroupId = localItems.length > 1 ? `batch-upload:${session.id}:${Date.now()}` : undefined
+    let completedCount = 0
+    let hasError = false
+
+    if (batchGroupId) {
+      updateTransfer({
+        id: batchGroupId,
+        file_name: `上传 ${localItems.length} 项`,
+        direction: 'upload',
+        total: localItems.length,
+        transferred: 0,
+        status: 'pending',
+        target_path: targetRemoteDir,
+        session_id: session.id,
+        group_id: batchGroupId,
+      })
+    }
+
     const canUseTar = await ensureRemoteTarSupport()
 
     // Fallback path: recursive SFTP upload when remote tar is unavailable.
@@ -1063,10 +1244,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       const folderItems = localItems.filter(i => i.is_dir)
       const fileItems = localItems.filter(i => !i.is_dir)
 
+      // Pre-create all folder transfer records so the batch group stays visible
       for (const folder of folderItems) {
         const remoteTarget = joinPath(targetRemoteDir, folder.name)
         const transferId = `upload:${remoteTarget}`
-
         updateTransfer({
           id: transferId,
           file_name: folder.name,
@@ -1075,7 +1256,14 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 0,
           status: 'pending',
           target_path: remoteTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
+      }
+
+      for (const folder of folderItems) {
+        const remoteTarget = joinPath(targetRemoteDir, folder.name)
+        const transferId = `upload:${remoteTarget}`
 
         try {
           await invoke('create_remote_dir', {
@@ -1093,7 +1281,23 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               transferred: 1,
               status: 'done',
               target_path: remoteTarget,
+              session_id: session.id,
+              group_id: batchGroupId,
             })
+            completedCount += 1
+            if (batchGroupId) {
+              updateTransfer({
+                id: batchGroupId,
+                file_name: `上传 ${localItems.length} 项`,
+                direction: 'upload',
+                total: localItems.length,
+                transferred: completedCount,
+                status: completedCount >= localItems.length ? 'done' : 'transferring',
+                target_path: targetRemoteDir,
+                session_id: session.id,
+                group_id: batchGroupId,
+              })
+            }
             continue
           }
 
@@ -1105,6 +1309,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               progressTotal: tasks.length,
               progressStart: index,
               displayTargetPath: remoteTarget,
+              sessionId: session.id,
+              groupId: batchGroupId,
             })
 
             if (result.error) {
@@ -1121,6 +1327,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
                 status: 'error',
                 error: '存在同名文件，已跳过冲突项。可重试并选择全部覆盖。',
                 target_path: remoteTarget,
+                session_id: session.id,
+                group_id: batchGroupId,
               })
               break
             }
@@ -1136,9 +1344,14 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               transferred: tasks.length,
               status: 'done',
               target_path: remoteTarget,
+              session_id: session.id,
+              group_id: batchGroupId,
             })
+          } else {
+            hasError = true
           }
         } catch (e) {
+          hasError = true
           updateTransfer({
             id: transferId,
             file_name: folder.name,
@@ -1148,13 +1361,61 @@ export function FileManager({ session, bookmarkTabId }: Props) {
             status: 'error',
             error: String(e),
             target_path: remoteTarget,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        }
+
+        completedCount += 1
+        if (batchGroupId) {
+          updateTransfer({
+            id: batchGroupId,
+            file_name: `上传 ${localItems.length} 项`,
+            direction: 'upload',
+            total: localItems.length,
+            transferred: completedCount,
+            status: completedCount >= localItems.length ? 'done' : 'transferring',
+            target_path: targetRemoteDir,
+            session_id: session.id,
+            group_id: batchGroupId,
           })
         }
       }
 
       if (fileItems.length > 0) {
-        await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll)
+        if (batchGroupId) {
+          await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll, batchGroupId)
+          completedCount += fileItems.length
+          updateTransfer({
+            id: batchGroupId,
+            file_name: `上传 ${localItems.length} 项`,
+            direction: 'upload',
+            total: localItems.length,
+            transferred: completedCount,
+            status: hasError ? 'error' : 'done',
+            error: hasError ? '部分文件传输失败' : undefined,
+            target_path: targetRemoteDir,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        } else {
+          await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll)
+        }
       } else {
+        if (batchGroupId) {
+          updateTransfer({
+            id: batchGroupId,
+            file_name: `上传 ${localItems.length} 项`,
+            direction: 'upload',
+            total: localItems.length,
+            transferred: completedCount,
+            status: hasError ? 'error' : 'done',
+            error: hasError ? '部分文件传输失败' : undefined,
+            target_path: targetRemoteDir,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        }
         await loadRemote(targetRemoteDir)
       }
       return
@@ -1166,14 +1427,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     const folderItems = localItems.filter(i => i.is_dir)
     const fileItems = localItems.filter(i => !i.is_dir)
 
+    // Pre-create all folder transfer records so the batch group stays visible
     for (const folder of folderItems) {
-      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const localSubTmp = joinPath(localTmpDir, `tinyterm-pack-${stamp}`)
-      const tmpTarLocal = joinPath(localSubTmp, '.tinyterm-pack.tar')
-      const tmpTarRemote = joinPath(targetRemoteDir, `.tinyterm-pack-${stamp}.tar`)
       const remoteTarget = joinPath(targetRemoteDir, folder.name)
       const transferId = `upload:${remoteTarget}`
-
       updateTransfer({
         id: transferId,
         file_name: folder.name,
@@ -1183,7 +1440,18 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         transferred_bytes: 0,
         status: 'pending',
         target_path: remoteTarget,
+        session_id: session.id,
+        group_id: batchGroupId,
       })
+    }
+
+    for (const folder of folderItems) {
+      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const localSubTmp = joinPath(localTmpDir, `tinyterm-pack-${stamp}`)
+      const tmpTarLocal = joinPath(localSubTmp, '.tinyterm-pack.tar')
+      const tmpTarRemote = joinPath(targetRemoteDir, `.tinyterm-pack-${stamp}.tar`)
+      const remoteTarget = joinPath(targetRemoteDir, folder.name)
+      const transferId = `upload:${remoteTarget}`
 
       try {
         await invoke('create_local_dir', { path: localSubTmp })
@@ -1207,6 +1475,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           progressStart: 20,
           progressSpan: 60,
           displayTargetPath: remoteTarget,
+          sessionId: session.id,
+          groupId: batchGroupId,
         })
         if (result.error) throw new Error(result.error)
 
@@ -1218,6 +1488,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 90,
           status: 'transferring',
           target_path: remoteTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
 
         if (overwriteAll) {
@@ -1245,8 +1517,11 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 100,
           status: 'done',
           target_path: remoteTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
       } catch (e) {
+        hasError = true
         updateTransfer({
           id: transferId,
           file_name: folder.name,
@@ -1256,6 +1531,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           status: 'error',
           error: String(e),
           target_path: remoteTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
       } finally {
         await invoke('execute_remote_command', {
@@ -1265,19 +1542,83 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         await invoke('delete_local', { path: tmpTarLocal, isDir: false }).catch(() => {})
         await invoke('delete_local', { path: localSubTmp, isDir: true }).catch(() => {})
       }
+
+      completedCount += 1
+      if (batchGroupId) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `上传 ${localItems.length} 项`,
+          direction: 'upload',
+          total: localItems.length,
+          transferred: completedCount,
+          status: completedCount >= localItems.length ? 'done' : 'transferring',
+          target_path: targetRemoteDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
     }
 
     if (fileItems.length > 0) {
-      await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll)
+      if (batchGroupId) {
+        await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll, batchGroupId)
+        completedCount += fileItems.length
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `上传 ${localItems.length} 项`,
+          direction: 'upload',
+          total: localItems.length,
+          transferred: completedCount,
+          status: hasError ? 'error' : 'done',
+          error: hasError ? '部分文件传输失败' : undefined,
+          target_path: targetRemoteDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      } else {
+        await runUploadQueue(fileItems.map(i => i.path), targetRemoteDir, 0, overwriteAll)
+      }
     } else {
+      if (batchGroupId) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `上传 ${localItems.length} 项`,
+          direction: 'upload',
+          total: localItems.length,
+          transferred: completedCount,
+          status: hasError ? 'error' : 'done',
+          error: hasError ? '部分文件传输失败' : undefined,
+          target_path: targetRemoteDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
       await loadRemote(targetRemoteDir)
     }
-  }, [session.sessionId, ensureRemoteTarSupport, collectLocalUploadTasks, joinPath, updateTransfer, startTransferTask, runUploadQueue, loadRemote, shellQuote, waitForStageProgress])
+  }, [session.sessionId, session.id, ensureRemoteTarSupport, collectLocalUploadTasks, joinPath, updateTransfer, startTransferTask, runUploadQueue, loadRemote, shellQuote, waitForStageProgress])
 
   // ── Download (remote → local) ─────────────────────────────────────────────
 
   const doDownload = useCallback(async (remoteItems: FileInfo[], targetLocalDir: string, overwriteAll = false) => {
     if (!session.sessionId) return
+
+    const batchGroupId = remoteItems.length > 1 ? `batch-download:${session.id}:${Date.now()}` : undefined
+    let completedCount = 0
+    let hasError = false
+
+    if (batchGroupId) {
+      updateTransfer({
+        id: batchGroupId,
+        file_name: `下载 ${remoteItems.length} 项`,
+        direction: 'download',
+        total: remoteItems.length,
+        transferred: 0,
+        status: 'pending',
+        target_path: targetLocalDir,
+        session_id: session.id,
+        group_id: batchGroupId,
+      })
+    }
 
     const canUseTar = await ensureRemoteTarSupport()
 
@@ -1286,10 +1627,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       const folderItems = remoteItems.filter(i => i.is_dir)
       const fileItems = remoteItems.filter(i => !i.is_dir)
 
+      // Pre-create all folder transfer records so the batch group stays visible
       for (const folder of folderItems) {
         const localTarget = joinPath(targetLocalDir, folder.name)
         const transferId = `download:${localTarget}`
-
         updateTransfer({
           id: transferId,
           file_name: folder.name,
@@ -1298,7 +1639,14 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 0,
           status: 'pending',
           target_path: localTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
+      }
+
+      for (const folder of folderItems) {
+        const localTarget = joinPath(targetLocalDir, folder.name)
+        const transferId = `download:${localTarget}`
 
         try {
           await invoke('create_local_dir', { path: localTarget }).catch(() => {})
@@ -1313,7 +1661,23 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               transferred: 1,
               status: 'done',
               target_path: localTarget,
+              session_id: session.id,
+              group_id: batchGroupId,
             })
+            completedCount += 1
+            if (batchGroupId) {
+              updateTransfer({
+                id: batchGroupId,
+                file_name: `下载 ${remoteItems.length} 项`,
+                direction: 'download',
+                total: remoteItems.length,
+                transferred: completedCount,
+                status: completedCount >= remoteItems.length ? 'done' : 'transferring',
+                target_path: targetLocalDir,
+                session_id: session.id,
+                group_id: batchGroupId,
+              })
+            }
             continue
           }
 
@@ -1330,6 +1694,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               progressTotal: tasks.length,
               progressStart: index,
               displayTargetPath: localTarget,
+              sessionId: session.id,
+              groupId: batchGroupId,
             })
 
             if (result.error) {
@@ -1346,6 +1712,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
                 status: 'error',
                 error: '存在同名文件，已跳过冲突项。可重试并选择全部覆盖。',
                 target_path: localTarget,
+                session_id: session.id,
+                group_id: batchGroupId,
               })
               break
             }
@@ -1361,9 +1729,14 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               transferred: tasks.length,
               status: 'done',
               target_path: localTarget,
+              session_id: session.id,
+              group_id: batchGroupId,
             })
+          } else {
+            hasError = true
           }
         } catch (e) {
+          hasError = true
           updateTransfer({
             id: transferId,
             file_name: folder.name,
@@ -1373,13 +1746,61 @@ export function FileManager({ session, bookmarkTabId }: Props) {
             status: 'error',
             error: String(e),
             target_path: localTarget,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        }
+
+        completedCount += 1
+        if (batchGroupId) {
+          updateTransfer({
+            id: batchGroupId,
+            file_name: `下载 ${remoteItems.length} 项`,
+            direction: 'download',
+            total: remoteItems.length,
+            transferred: completedCount,
+            status: completedCount >= remoteItems.length ? 'done' : 'transferring',
+            target_path: targetLocalDir,
+            session_id: session.id,
+            group_id: batchGroupId,
           })
         }
       }
 
       if (fileItems.length > 0) {
-        await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll)
+        if (batchGroupId) {
+          await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll, batchGroupId)
+          completedCount += fileItems.length
+          updateTransfer({
+            id: batchGroupId,
+            file_name: `下载 ${remoteItems.length} 项`,
+            direction: 'download',
+            total: remoteItems.length,
+            transferred: completedCount,
+            status: hasError ? 'error' : 'done',
+            error: hasError ? '部分文件传输失败' : undefined,
+            target_path: targetLocalDir,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        } else {
+          await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll)
+        }
       } else {
+        if (batchGroupId) {
+          updateTransfer({
+            id: batchGroupId,
+            file_name: `下载 ${remoteItems.length} 项`,
+            direction: 'download',
+            total: remoteItems.length,
+            transferred: completedCount,
+            status: hasError ? 'error' : 'done',
+            error: hasError ? '部分文件传输失败' : undefined,
+            target_path: targetLocalDir,
+            session_id: session.id,
+            group_id: batchGroupId,
+          })
+        }
         await loadLocal(targetLocalDir)
       }
       return
@@ -1391,15 +1812,10 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     const folderItems = remoteItems.filter(i => i.is_dir)
     const fileItems = remoteItems.filter(i => !i.is_dir)
 
+    // Pre-create all folder transfer records so the batch group stays visible
     for (const folder of folderItems) {
-      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const localSubTmp = joinPath(localTmpDir, `tinyterm-pack-${stamp}`)
-      const tmpTarLocal = joinPath(localSubTmp, '.tinyterm-pack.tar')
-      const remoteParent = folder.path.substring(0, folder.path.lastIndexOf('/')) || '/'
-      const tmpTarRemote = joinPath(remoteParent, `.tinyterm-pack-${stamp}.tar`)
       const localTarget = joinPath(targetLocalDir, folder.name)
       const transferId = `download:${localTarget}`
-
       updateTransfer({
         id: transferId,
         file_name: folder.name,
@@ -1409,7 +1825,19 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         transferred_bytes: 0,
         status: 'pending',
         target_path: localTarget,
+        session_id: session.id,
+        group_id: batchGroupId,
       })
+    }
+
+    for (const folder of folderItems) {
+      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const localSubTmp = joinPath(localTmpDir, `tinyterm-pack-${stamp}`)
+      const tmpTarLocal = joinPath(localSubTmp, '.tinyterm-pack.tar')
+      const remoteParent = folder.path.substring(0, folder.path.lastIndexOf('/')) || '/'
+      const tmpTarRemote = joinPath(remoteParent, `.tinyterm-pack-${stamp}.tar`)
+      const localTarget = joinPath(targetLocalDir, folder.name)
+      const transferId = `download:${localTarget}`
 
       try {
         await invoke('create_local_dir', { path: localSubTmp })
@@ -1422,6 +1850,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 10,
           status: 'transferring',
           target_path: localTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
 
         const packCmd = `tar -cf ${shellQuote(tmpTarRemote)} -C ${shellQuote(remoteParent)} ${shellQuote(folder.name)}`
@@ -1438,6 +1868,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 20,
           status: 'transferring',
           target_path: localTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
 
         const result = await startTransferTask('download', tmpTarRemote, tmpTarLocal, true, {
@@ -1447,6 +1879,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           progressStart: 20,
           progressSpan: 60,
           displayTargetPath: localTarget,
+          sessionId: session.id,
+          groupId: batchGroupId,
         })
         if (result.error) throw new Error(result.error)
 
@@ -1479,8 +1913,11 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           transferred: 100,
           status: 'done',
           target_path: localTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
       } catch (e) {
+        hasError = true
         updateTransfer({
           id: transferId,
           file_name: folder.name,
@@ -1490,6 +1927,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
           status: 'error',
           error: String(e),
           target_path: localTarget,
+          session_id: session.id,
+          group_id: batchGroupId,
         })
       } finally {
         await invoke('execute_remote_command', {
@@ -1499,14 +1938,60 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         await invoke('delete_local', { path: tmpTarLocal, isDir: false }).catch(() => {})
         await invoke('delete_local', { path: localSubTmp, isDir: true }).catch(() => {})
       }
+
+      completedCount += 1
+      if (batchGroupId) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `下载 ${remoteItems.length} 项`,
+          direction: 'download',
+          total: remoteItems.length,
+          transferred: completedCount,
+          status: completedCount >= remoteItems.length ? 'done' : 'transferring',
+          target_path: targetLocalDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
     }
 
     if (fileItems.length > 0) {
-      await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll)
+      if (batchGroupId) {
+        await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll, batchGroupId)
+        completedCount += fileItems.length
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `下载 ${remoteItems.length} 项`,
+          direction: 'download',
+          total: remoteItems.length,
+          transferred: completedCount,
+          status: hasError ? 'error' : 'done',
+          error: hasError ? '部分文件传输失败' : undefined,
+          target_path: targetLocalDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      } else {
+        await runDownloadQueue(fileItems.map(i => i.path), targetLocalDir, 0, overwriteAll)
+      }
     } else {
+      if (batchGroupId) {
+        updateTransfer({
+          id: batchGroupId,
+          file_name: `下载 ${remoteItems.length} 项`,
+          direction: 'download',
+          total: remoteItems.length,
+          transferred: completedCount,
+          status: hasError ? 'error' : 'done',
+          error: hasError ? '部分文件传输失败' : undefined,
+          target_path: targetLocalDir,
+          session_id: session.id,
+          group_id: batchGroupId,
+        })
+      }
       await loadLocal(targetLocalDir)
     }
-  }, [session.sessionId, ensureRemoteTarSupport, collectRemoteDownloadTasks, joinPath, updateTransfer, startTransferTask, runDownloadQueue, loadLocal, shellQuote, waitForStageProgress])
+  }, [session.sessionId, session.id, ensureRemoteTarSupport, collectRemoteDownloadTasks, joinPath, updateTransfer, startTransferTask, runDownloadQueue, loadLocal, shellQuote, waitForStageProgress])
 
   // ── Arrow button transfers ────────────────────────────────────────────────
 
@@ -1753,6 +2238,8 @@ export function FileManager({ session, bookmarkTabId }: Props) {
       status: 'error',
       error: '用户取消',
       target_path: activeTransfer.target_path,
+      session_id: activeTransfer.session_id,
+      group_id: activeTransfer.group_id,
     })
 
     // Remove the transfer after 2 seconds based on user request "点击取消，隔2秒就消失"
@@ -1763,7 +2250,9 @@ export function FileManager({ session, bookmarkTabId }: Props) {
         direction: activeTransfer.direction,
         total: activeTransfer.total ?? 0,
         transferred: activeTransfer.transferred ?? 0,
-        status: 'done'
+        status: 'done',
+        session_id: activeTransfer.session_id,
+        group_id: activeTransfer.group_id,
       })
     }, 2000)
   }
@@ -1817,7 +2306,9 @@ export function FileManager({ session, bookmarkTabId }: Props) {
     setTransferConflict(null)
 
     // Re-run the same transfer with overwrite=true — backend will skip conflict check
-    await startTransferTask(direction, sourcePath, targetPath, true)
+    await startTransferTask(direction, sourcePath, targetPath, true, {
+      sessionId: session.id,
+    })
 
     if (remaining.length === 0) {
       if (direction === 'upload') await loadRemote(remotePath)

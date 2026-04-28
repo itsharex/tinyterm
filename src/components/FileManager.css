@@ -147,85 +147,66 @@
 .fm-transfer-queue {
   display: flex;
   flex-direction: column;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
   background: rgba(0, 0, 0, 0.25);
 }
 
-.fm-transfer-compact {
+/* Single compact row */
+.fm-tc-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(58, 132, 255, 0.1);
+  min-height: 28px;
+  overflow: hidden;
 }
 
-.fm-tc-header {
+/* Region 1: Active transfer (filename + progress) — LEFT */
+.fm-tc-region--active {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  color: var(--color-text-primary);
+  min-width: 0;
+  padding: 4px 10px;
 }
 
-.fm-tc-icon {
+.fm-tc-dir {
   color: var(--color-accent);
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.fm-tc-action {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
 }
 
 .fm-tc-filename {
+  font-size: 11px;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
-}
-
-.fm-tc-badge {
-  color: var(--color-text-secondary);
-  font-size: 10px;
-}
-
-.fm-tc-spacer {
-  flex: 1;
-}
-
-.fm-tc-percent {
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-secondary);
-}
-
-.fm-tc-cancel {
-  background: none;
-  border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-
-.fm-tc-cancel:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-primary);
+  max-width: 120px;
+  flex-shrink: 0;
 }
 
 .fm-tc-track {
+  flex: 1;
   height: 3px;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 2px;
   overflow: hidden;
-}
-
-.fm-tc-error {
-  font-size: 10px;
-  line-height: 1.35;
-  color: #ff9b9b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 40px;
 }
 
 .fm-tc-fill {
@@ -233,30 +214,85 @@
   transition: width 0.15s ease-out;
 }
 
-.fm-transfer-pct {
-  font-size: 11px;
-  color: var(--color-text-primary);
+.fm-tc-pct {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
-  width: 36px;
+  min-width: 28px;
   text-align: right;
 }
 
-.fm-transfer-detail {
+.fm-tc-meta {
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
   flex-shrink: 0;
-  margin-left: 8px;
+  white-space: nowrap;
 }
 
-.fm-transfer-cancel {
+/* Region 2: Pending — CENTER */
+.fm-tc-region--pending {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 52px;
+}
+
+/* Region 3: Done — RIGHT */
+.fm-tc-region--done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 52px;
+}
+
+.fm-tc-label {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.fm-tc-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fm-tc-region--pending .fm-tc-count {
+  background: rgba(255, 183, 77, 0.18);
+  color: #ffb74d;
+}
+
+.fm-tc-region--done .fm-tc-count {
+  background: rgba(76, 175, 138, 0.18);
+  color: #81c784;
+}
+
+/* Cancel button */
+.fm-tc-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
-  border-radius: 5px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -264,9 +300,18 @@
   flex-shrink: 0;
 }
 
-.fm-transfer-cancel:hover {
-  background: rgba(220, 50, 50, 0.2);
+.fm-tc-cancel:hover {
+  background: rgba(220, 50, 50, 0.15);
   color: var(--color-error);
+}
+
+/* Error text on single-item row */
+.fm-tc-row > .fm-tc-error {
+  font-size: 10px;
+  color: #ff9b9b;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 8px;
 }
 
 /* ── Dual panels container ────────────────────────────────────────────────── */
