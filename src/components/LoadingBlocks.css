@@ -1,0 +1,33 @@
+.lb-blocks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.lb-row {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+
+.lb-block {
+  width: 3px;
+  height: 3px;
+  border-radius: 1px;
+  background: rgba(58, 132, 255, 0.12);
+  animation: lb-block-wave 1s ease-in-out infinite;
+}
+
+@keyframes lb-block-wave {
+  0%, 100% {
+    background: rgba(58, 132, 255, 0.12);
+    transform: scale(1);
+    box-shadow: none;
+  }
+  50% {
+    background: rgba(58, 132, 255, 0.9);
+    transform: scale(1.4);
+    box-shadow: 0 0 5px rgba(58, 132, 255, 0.4);
+  }
+}

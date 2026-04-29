@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { invoke, Channel } from '@tauri-apps/api/core'
 import type { SessionTab } from '../types'
 import { useStore } from '../store'
+import { LoadingBlocks } from './LoadingBlocks'
 import '@xterm/xterm/css/xterm.css'
 import './TerminalView.css'
 
@@ -115,6 +116,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
 
   const [passwordInput, setPasswordInput] = useState('')
   const [reconnecting, setReconnecting] = useState(false)
+  const [showLoading, setShowLoading] = useState(true)
 
   const isAuthError =
     session.status === 'error' &&
@@ -270,6 +272,16 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       err => console.error('subscribe_session:', err),
     )
 
+    // ── Auto clear MOTD + hide loading ────────────────────────────────────
+
+    const clearTimeoutId = setTimeout(() => {
+      invoke('write_to_session', { sessionId, data: 'clear\r' }).catch(() => {})
+    }, 400)
+
+    const loadingTimeoutId = setTimeout(() => {
+      setShowLoading(false)
+    }, 800)
+
     // ── ResizeObserver ────────────────────────────────────────────────────
 
     const ro = new ResizeObserver(() => {
@@ -282,6 +294,8 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     // ── Cleanup ───────────────────────────────────────────────────────────
 
     return () => {
+      clearTimeout(clearTimeoutId)
+      clearTimeout(loadingTimeoutId)
       ro.disconnect()
       window.removeEventListener('keydown', handleCopyPaste)
       textarea?.removeEventListener('copy', handleCopyEvent)
@@ -400,6 +414,11 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       )}
 
       <div ref={termRef} className="terminal-container" />
+      {showLoading && session.status === 'connected' && (
+        <div className="terminal-loading-overlay">
+          <LoadingBlocks />
+        </div>
+      )}
     </div>
   )
 }

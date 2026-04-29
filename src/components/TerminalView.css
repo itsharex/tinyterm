@@ -20,6 +20,18 @@
   background: transparent !important;
 }
 
+.terminal-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #08111b;
+  z-index: 5;
+}
+
 .terminal-status {
   position: absolute;
   inset: 0;
