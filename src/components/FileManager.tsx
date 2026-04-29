@@ -2537,26 +2537,40 @@ export function FileManager({ session, bookmarkTabId }: Props) {
               <div className="fm-divider-line" />
               <div className="fm-divider-arrows">
                 <button
-                  className={`fm-transfer-btn${uploadBusy ? ' is-loading' : ''}`}
+                  className={`fm-transfer-btn${uploadBusy ? ' is-loading' : ''}${selectedLocalPaths.length > 0 ? ' is-active' : ''}`}
                   onClick={handleTransferToRemote}
-                  title={uploadBusy ? '上传中...' : '上传选中文件到远程当前目录'}
+                  title={uploadBusy ? '上传中...' : selectedLocalPaths.length > 0 ? `上传 ${selectedLocalPaths.length} 项到远程` : '上传选中文件到远程当前目录'}
                   type="button"
                   disabled={localDeleting || remoteDeleting || uploadBusy}
                 >
                   {uploadBusy
                     ? <span className="fm-transfer-spinner" />
-                    : <ArrowRight size={14} strokeWidth={2} className="fm-divider-icon" />}
+                    : (
+                      <>
+                        <ArrowRight size={12} strokeWidth={2} className="fm-divider-icon" />
+                        {selectedLocalPaths.length > 0 && (
+                          <span className="fm-transfer-badge fm-transfer-badge--left">{selectedLocalPaths.length}</span>
+                        )}
+                      </>
+                    )}
                 </button>
                 <button
-                  className={`fm-transfer-btn${downloadBusy ? ' is-loading' : ''}`}
+                  className={`fm-transfer-btn${downloadBusy ? ' is-loading' : ''}${selectedRemotePaths.length > 0 ? ' is-active' : ''}`}
                   onClick={handleTransferToLocal}
-                  title={downloadBusy ? '下载中...' : '下载选中文件到本地当前目录'}
+                  title={downloadBusy ? '下载中...' : selectedRemotePaths.length > 0 ? `下载 ${selectedRemotePaths.length} 项到本地` : '下载选中文件到本地当前目录'}
                   type="button"
                   disabled={localDeleting || remoteDeleting || downloadBusy}
                 >
                   {downloadBusy
                     ? <span className="fm-transfer-spinner" />
-                    : <ArrowLeft size={14} strokeWidth={2} className="fm-divider-icon" />}
+                    : (
+                      <>
+                        <ArrowLeft size={12} strokeWidth={2} className="fm-divider-icon" />
+                        {selectedRemotePaths.length > 0 && (
+                          <span className="fm-transfer-badge fm-transfer-badge--right">{selectedRemotePaths.length}</span>
+                        )}
+                      </>
+                    )}
                 </button>
               </div>
               <div className="fm-divider-line" />
