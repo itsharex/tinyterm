@@ -11,7 +11,6 @@ import {
 } from 'lucide-react'
 
 import { useStore } from '../store'
-import { LoadingBlocks } from './LoadingBlocks'
 import './FileManager.css'
 
 interface Props {
@@ -213,7 +212,7 @@ function Panel({
       {/* File list */}
       <div className="fm-list">
         {loading ? (
-          <div className="fm-status loading"><LoadingBlocks /></div>
+          <div className="fm-status loading"><div className="fm-spinner" /></div>
         ) : error ? (
           <div className="fm-status error">{error}</div>
         ) : files.length === 0 ? (
