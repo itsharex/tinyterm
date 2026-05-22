@@ -5,6 +5,13 @@ All notable changes to TinyTerm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-05-22
+
+### Changed
+- 辅助终端关闭按钮移除，统一由顶部拆分按钮控制
+- 拆分按钮激活时显示绿色泛光效果
+- 修复辅助终端关闭按钮与快捷指令按钮重叠问题
+
 ## [1.0.7] - 2026-05-22
 
 ### Fixed
