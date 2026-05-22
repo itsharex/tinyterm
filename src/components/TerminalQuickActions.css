@@ -150,10 +150,16 @@
 
 /* Scrollable command list */
 .quick-actions-scroll {
-  max-height: 160px;
+  max-height: 320px;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 2px;
+  transition: max-height 0.2s ease;
+}
+
+/* When file manager is open, shrink the panel to avoid being clipped */
+.quick-actions-panel.fm-open .quick-actions-scroll {
+  max-height: 140px;
 }
 
 .quick-actions-scroll::-webkit-scrollbar {

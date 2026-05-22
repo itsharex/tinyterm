@@ -6,6 +6,7 @@ import './TerminalQuickActions.css'
 interface Props {
   sessionId: string
   onWrite: (data: string) => void
+  fmOpen?: boolean
 }
 
 interface CommandItem {
@@ -102,7 +103,7 @@ const COMMAND_CATEGORIES: CommandCategory[] = [
   },
 ]
 
-export function TerminalQuickActions({ sessionId, onWrite }: Props) {
+export function TerminalQuickActions({ sessionId, onWrite, fmOpen }: Props) {
   const [open, setOpen] = useState(false)
   const [sysInfoType, setSysInfoType] = useState<QueryType | null>(null)
 
@@ -130,7 +131,7 @@ export function TerminalQuickActions({ sessionId, onWrite }: Props) {
             <Command size={13} strokeWidth={2} />
           </button>
         ) : (
-          <div className="quick-actions-panel">
+          <div className={`quick-actions-panel${fmOpen ? ' fm-open' : ''}`}>
             <div className="quick-actions-header">
               <span className="quick-actions-title">
                 <Terminal size={11} strokeWidth={2} />

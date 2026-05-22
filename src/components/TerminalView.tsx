@@ -392,6 +392,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
         <TerminalQuickActions
           sessionId={backendSessionId ?? session.sessionId ?? ''}
           onWrite={handleQuickWrite}
+          fmOpen={session.fmOpen}
         />
       )}
       {(session.status === 'error' || session.status === 'disconnected') && (
