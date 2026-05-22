@@ -150,7 +150,7 @@
 
 /* Scrollable command list */
 .quick-actions-scroll {
-  max-height: 320px;
+  max-height: 160px;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 2px;

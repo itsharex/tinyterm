@@ -16,7 +16,7 @@
         "width": 1100,
         "height": 720,
         "minWidth": 840,
-        "minHeight": 540,
+        "minHeight": 640,
         "backgroundColor": "#07162d",
         "visible": true,
         "decorations": true,
