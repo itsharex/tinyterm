@@ -5,6 +5,15 @@ All notable changes to TinyTerm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-05-22
+
+### Added
+- 终端快捷指令悬浮面板（CPU/内存/磁盘速查弹窗 + 55 条常用指令）
+- 系统信息弹窗组件，支持表格展示、分页浏览
+- 通过 `execute_remote_command` 在远程服务器上执行系统查询命令
+- CPU/内存进程列表展示程序名称、执行路径及占用百分比
+- 磁盘使用率超过 80% 时橙色高亮告警
+
 ## [1.0.5] - 2026-05-06
 
 ### Added

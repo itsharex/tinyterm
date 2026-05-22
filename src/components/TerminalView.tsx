@@ -6,6 +6,7 @@ import { invoke, Channel } from '@tauri-apps/api/core'
 import type { SessionTab } from '../types'
 import { useStore } from '../store'
 import { LoadingBlocks } from './LoadingBlocks'
+import { TerminalQuickActions } from './TerminalQuickActions'
 import '@xterm/xterm/css/xterm.css'
 import './TerminalView.css'
 
@@ -377,10 +378,22 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     }
   }
 
+  const handleQuickWrite = (data: string) => {
+    const resolvedSessionId = backendSessionId ?? session.sessionId
+    if (!resolvedSessionId) return
+    invoke('write_to_session', { sessionId: resolvedSessionId, data }).catch(() => {})
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="terminal-wrapper">
+      {session.status === 'connected' && (
+        <TerminalQuickActions
+          sessionId={backendSessionId ?? session.sessionId ?? ''}
+          onWrite={handleQuickWrite}
+        />
+      )}
       {(session.status === 'error' || session.status === 'disconnected') && (
         <div className={`terminal-status ${session.status === 'disconnected' ? 'disconnected' : 'error'}`}>
           <div className="error-header">
