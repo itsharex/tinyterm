@@ -5,6 +5,12 @@ All notable changes to TinyTerm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-05-22
+
+### Fixed
+- 同步更新 Tauri Rust crate 与 NPM 包版本，解决版本不匹配警告
+- 调整窗口最小尺寸为 880×700
+
 ## [1.0.6] - 2026-05-22
 
 ### Added
