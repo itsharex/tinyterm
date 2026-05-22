@@ -606,6 +606,17 @@
   background: transparent !important;
 }
 
+.session-side-terminal-btn.is-active {
+  color: rgba(100, 200, 140, 0.85);
+  filter: drop-shadow(0 0 4px rgba(100, 200, 140, 0.45));
+}
+
+.session-side-terminal-btn.is-active:hover:not(:disabled) {
+  background: rgba(80, 180, 120, 0.18);
+  color: rgba(130, 230, 170, 0.95);
+  filter: drop-shadow(0 0 6px rgba(100, 220, 150, 0.6));
+}
+
 .session-side-terminal-btn.is-loading svg {
   animation: session-add-spin 0.6s linear infinite;
 }

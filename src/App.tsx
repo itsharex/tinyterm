@@ -502,14 +502,14 @@ function HostTabPanel({
         {/* 辅助终端按钮 */}
         {bookmarkTab.sessions.length > 0 && activeSession && (
           <button
-            className={`session-side-terminal-btn ${isTogglingSideTerminal ? 'is-loading' : ''}`}
+            className={`session-side-terminal-btn ${isTogglingSideTerminal ? 'is-loading' : ''} ${hasSideTerminal ? 'is-active' : ''}`}
             onClick={() => onToggleSideTerminal(bookmarkTab.id, activeSession.id)}
-            disabled={hasSideTerminal || isTogglingSideTerminal}
+            disabled={isTogglingSideTerminal}
             title={
               isTogglingSideTerminal
                 ? '正在打开辅助终端...'
                 : hasSideTerminal
-                ? '辅助终端已打开'
+                ? '关闭辅助终端'
                 : '打开右侧辅助终端'
             }
           >
@@ -581,20 +581,6 @@ function HostTabPanel({
                       position: 'relative',
                     }}
                   >
-                    <button
-                      className="session-tab-new"
-                      onClick={() => onToggleSideTerminal(bookmarkTab.id, session.id)}
-                      title="关闭右侧辅助终端"
-                      style={{
-                        position: 'absolute',
-                        top: '6px',
-                        right: '6px',
-                        zIndex: 2,
-                        background: 'rgba(20, 13, 52, 0.72)',
-                      }}
-                    >
-                      <X size={14} strokeWidth={2.2} />
-                    </button>
                     <TerminalView
                       session={session}
                       backendSessionId={session.sideTerminalSessionId}
