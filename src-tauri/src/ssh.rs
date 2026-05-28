@@ -6,6 +6,36 @@ use std::net::TcpStream;
 use std::time::Duration;
 use crate::models::Bookmark;
 
+/// Enable TCP keepalive on the stream with platform-specific methods.
+/// Sends first probe after 60s idle, retries every 15s.
+fn set_tcp_keepalive(tcp: &TcpStream) -> std::io::Result<()> {
+    let keepalive = socket2::TcpKeepalive::new()
+        .with_time(Duration::from_secs(60))
+        .with_interval(Duration::from_secs(15));
+
+    #[cfg(unix)]
+    {
+        use std::os::fd::{AsRawFd, FromRawFd};
+        let raw_fd = tcp.as_raw_fd();
+        // SAFETY: wrap the fd temporarily; forget() prevents socket2 from closing it.
+        let sock = unsafe { socket2::Socket::from_raw_fd(raw_fd) };
+        sock.set_keepalive(true)?;
+        sock.set_tcp_keepalive(&keepalive)?;
+        std::mem::forget(sock);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::{AsRawSocket, FromRawSocket};
+        let raw_socket = tcp.as_raw_socket();
+        // SAFETY: wrap the socket temporarily; forget() prevents socket2 from closing it.
+        let sock = unsafe { socket2::Socket::from_raw_socket(raw_socket) };
+        sock.set_keepalive(true)?;
+        sock.set_tcp_keepalive(&keepalive)?;
+        std::mem::forget(sock);
+    }
+    Ok(())
+}
+
 /// Establish the TCP transport and SSH handshake, but do not authenticate yet.
 pub fn connect_ssh_transport(bookmark: &Bookmark) -> Result<Session> {
     let addr = format!("{}:{}", bookmark.host, bookmark.port);
@@ -15,26 +45,9 @@ pub fn connect_ssh_transport(bookmark: &Bookmark) -> Result<Session> {
 
     // Enable TCP keepalive so the OS detects dead connections
     // even when the app is idle (e.g. window occluded).
-    {
-        use std::os::fd::{AsRawFd, FromRawFd};
-        let raw_fd = tcp.as_raw_fd();
-        // SAFETY: we wrap the raw fd in a socket2::Socket just to call
-        // set_keepalive, then forget() it so the fd is NOT closed.
-        // The original TcpStream still owns and will close the fd.
-        let sock = unsafe { socket2::Socket::from_raw_fd(raw_fd) };
-        sock.set_keepalive(true).unwrap_or_else(|e| {
-            log::warn!("Failed to enable TCP keepalive: {}", e);
-        });
-        sock.set_tcp_keepalive(
-            &socket2::TcpKeepalive::new()
-                .with_time(Duration::from_secs(60))
-                .with_interval(Duration::from_secs(15)),
-        )
-        .unwrap_or_else(|e| {
-            log::warn!("Failed to set TCP keepalive params: {}", e);
-        });
-        std::mem::forget(sock);
-    }
+    set_tcp_keepalive(&tcp).unwrap_or_else(|e| {
+        log::warn!("Failed to set TCP keepalive: {}", e);
+    });
 
     let mut sess = Session::new().map_err(|e| anyhow!("SSH session init failed: {}", e))?;
     sess.set_tcp_stream(tcp);
