@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -7,6 +8,7 @@ import type { SessionTab } from '../types'
 import { useStore } from '../store'
 import { LoadingBlocks } from './LoadingBlocks'
 import { TerminalQuickActions } from './TerminalQuickActions'
+import { Copy, ClipboardPaste } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import './TerminalView.css'
 
@@ -114,10 +116,12 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const settings = useStore(s => s.settings)
   const reconnectHostSessions = useStore(s => s.reconnectHostSessions)
   const appZoom = useStore(s => s.appZoom)
+  const addToast = useStore(s => s.addToast)
 
   const [passwordInput, setPasswordInput] = useState('')
   const [reconnecting, setReconnecting] = useState(false)
   const [showLoading, setShowLoading] = useState(true)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
   const isAuthError =
     session.status === 'error' &&
@@ -191,33 +195,40 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       sendToSession(data)
     })
 
-    // ── Copy/Paste shortcuts ──────────────────────────────────────────────
+    // ── Copy/Paste shortcuts (scoped to terminal container) ───────────────
 
-    const handleCopyPaste = (event: KeyboardEvent) => {
+    const handleTerminalKeyDown = (event: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes('MAC')
       const modifier = isMac ? event.metaKey : event.ctrlKey
 
       if (modifier && event.key === 'c' && term.hasSelection()) {
         event.preventDefault()
+        event.stopPropagation()
         const selection = term.getSelection()
         if (selection) {
-          navigator.clipboard.writeText(selection).catch(() => {})
+          navigator.clipboard.writeText(selection)
+            .then(() => addToast({ message: '复制成功', type: 'success' }))
+            .catch(() => addToast({ message: '复制失败', type: 'error' }))
         }
         return
       }
 
       if (modifier && event.key === 'v') {
         event.preventDefault()
-        navigator.clipboard.readText().then(text => {
-          if (text) {
-            sendToSession(text)
-          }
-        }).catch(() => {})
+        event.stopPropagation()
+        navigator.clipboard.readText()
+          .then(text => {
+            if (text) {
+              sendToSession(text)
+              addToast({ message: '粘贴成功', type: 'success' })
+            }
+          })
+          .catch(() => addToast({ message: '粘贴失败', type: 'error' }))
         return
       }
     }
 
-    window.addEventListener('keydown', handleCopyPaste)
+    termRef.current?.addEventListener('keydown', handleTerminalKeyDown, true)
 
     // ── Handle copy/paste events from context menu ────────────────────────
 
@@ -226,6 +237,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       if (selection) {
         event.preventDefault()
         event.clipboardData?.setData('text/plain', selection)
+        addToast({ message: '复制成功', type: 'success' })
       }
     }
 
@@ -234,21 +246,13 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       const text = event.clipboardData?.getData('text')
       if (text) {
         sendToSession(text)
+        addToast({ message: '粘贴成功', type: 'success' })
       }
     }
 
     // Listen on textarea directly for copy/paste from context menu
     textarea?.addEventListener('copy', handleCopyEvent)
     textarea?.addEventListener('paste', handlePasteEvent)
-
-    // ── Auto copy on selection ────────────────────────────────────────────
-
-    term.onSelectionChange(() => {
-      const selection = term.getSelection()
-      if (selection) {
-        navigator.clipboard.writeText(selection).catch(() => {})
-      }
-    })
 
     // ── Resize ────────────────────────────────────────────────────────────
 
@@ -283,6 +287,17 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       setShowLoading(false)
     }, 800)
 
+    // ── Right-click context menu ──────────────────────────────────────────
+
+    const container = termRef.current
+
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault()
+      setContextMenu({ x: event.clientX, y: event.clientY })
+    }
+
+    container?.addEventListener('contextmenu', handleContextMenu)
+
     // ── ResizeObserver ────────────────────────────────────────────────────
 
     const ro = new ResizeObserver(() => {
@@ -298,7 +313,8 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       clearTimeout(clearTimeoutId)
       clearTimeout(loadingTimeoutId)
       ro.disconnect()
-      window.removeEventListener('keydown', handleCopyPaste)
+      container?.removeEventListener('contextmenu', handleContextMenu)
+      container?.removeEventListener('keydown', handleTerminalKeyDown, true)
       textarea?.removeEventListener('copy', handleCopyEvent)
       textarea?.removeEventListener('paste', handlePasteEvent)
       textarea?.removeEventListener('keydown', handleKeyDown, true)
@@ -384,6 +400,34 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     invoke('write_to_session', { sessionId: resolvedSessionId, data }).catch(() => {})
   }
 
+  // ── Context menu actions ─────────────────────────────────────────────────
+
+  const handleMenuCopy = () => {
+    const term = xtermRef.current
+    if (!term) return
+    const selection = term.getSelection()
+    if (selection) {
+      navigator.clipboard.writeText(selection)
+        .then(() => addToast({ message: '复制成功', type: 'success' }))
+        .catch(() => addToast({ message: '复制失败', type: 'error' }))
+    }
+    setContextMenu(null)
+  }
+
+  const handleMenuPaste = () => {
+    const resolvedSessionId = backendSessionId ?? session.sessionId
+    if (!resolvedSessionId) return
+    navigator.clipboard.readText()
+      .then(text => {
+        if (text) {
+          invoke('write_to_session', { sessionId: resolvedSessionId, data: text }).catch(() => {})
+          addToast({ message: '粘贴成功', type: 'success' })
+        }
+      })
+      .catch(() => addToast({ message: '粘贴失败', type: 'error' }))
+    setContextMenu(null)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -433,6 +477,95 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
           <LoadingBlocks />
         </div>
       )}
+
+      {contextMenu && createPortal(
+        <>
+          <div
+            className="terminal-contextmenu-overlay"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={e => {
+              e.preventDefault()
+              const termEl = termRef.current
+              if (termEl) {
+                const rect = termEl.getBoundingClientRect()
+                const inside =
+                  e.clientX >= rect.left &&
+                  e.clientX <= rect.right &&
+                  e.clientY >= rect.top &&
+                  e.clientY <= rect.bottom
+                if (inside) {
+                  setContextMenu({ x: e.clientX, y: e.clientY })
+                  return
+                }
+              }
+              setContextMenu(null)
+            }}
+          />
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onCopy={handleMenuCopy}
+            onPaste={handleMenuPaste}
+            canCopy={!!xtermRef.current?.getSelection()}
+          />
+        </>,
+        document.body,
+      )}
+    </div>
+  )
+}
+
+// ── Context Menu sub-component with viewport boundary check ───────────────
+
+interface ContextMenuProps {
+  x: number
+  y: number
+  onCopy: () => void
+  onPaste: () => void
+  canCopy: boolean
+}
+
+function ContextMenu({ x, y, onCopy, onPaste, canCopy }: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ x, y })
+
+  useEffect(() => {
+    const menu = menuRef.current
+    if (!menu) return
+
+    const rect = menu.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+
+    let nextX = x
+    let nextY = y
+
+    // Prevent overflow on right edge
+    if (x + rect.width > vw) {
+      nextX = Math.max(4, vw - rect.width - 4)
+    }
+    // Prevent overflow on bottom edge
+    if (y + rect.height > vh) {
+      nextY = Math.max(4, vh - rect.height - 4)
+    }
+
+    setPosition({ x: nextX, y: nextY })
+  }, [x, y])
+
+  return (
+    <div
+      ref={menuRef}
+      className="terminal-contextmenu"
+      style={{ left: position.x, top: position.y }}
+    >
+      <button className="terminal-contextmenu-item" disabled={!canCopy} onClick={onCopy}>
+        <Copy size={13} />
+        <span>复制</span>
+      </button>
+      <button className="terminal-contextmenu-item" onClick={onPaste}>
+        <ClipboardPaste size={13} />
+        <span>粘贴</span>
+      </button>
     </div>
   )
 }

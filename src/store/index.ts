@@ -140,6 +140,18 @@ interface AppState {
   // Transfer progress
   updateTransfer: (progress: TransferProgress) => void
   removeTransfer: (transferId: string) => void
+
+  // Toast notifications
+  toasts: ToastItem[]
+  addToast: (toast: Omit<ToastItem, 'id'>) => void
+  removeToast: (id: string) => void
+}
+
+type ToastItem = {
+  id: string
+  message: string
+  type: 'success' | 'error' | 'info'
+  key?: string
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -340,6 +352,7 @@ export const useStore = create<AppState>((set, get) => ({
   credentialsModalOpen: false,
   hostsModalOpen: false,
   appDialog: null,
+  toasts: [],
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -1045,6 +1058,27 @@ export const useStore = create<AppState>((set, get) => ({
   removeTransfer: (transferId) => {
     set(state => ({
       transfers: state.transfers.filter(t => (t.id || `${t.direction}:${t.file_name}`) !== transferId),
+    }))
+  },
+
+  // ── Toast notifications ─────────────────────────────────────────────────
+
+  addToast: (toast) => {
+    const id = nanoid(6)
+    set(state => {
+      const key = (toast as any).key
+      const filtered = key
+        ? state.toasts.filter(t => t.key !== key)
+        : state.toasts
+      return {
+        toasts: [...filtered, { ...toast, id }],
+      }
+    })
+  },
+
+  removeToast: (id) => {
+    set(state => ({
+      toasts: state.toasts.filter(t => t.id !== id),
     }))
   },
 }))
