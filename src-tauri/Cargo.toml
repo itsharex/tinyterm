@@ -1,6 +1,6 @@
 [package]
 name = "tinyterm"
-version = "1.0.9"
+version = "1.0.10"
 description = "TinyTerm - SSH Terminal Client"
 authors = ["TinyTerm"]
 edition = "2021"
@@ -38,6 +38,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 log = "0.4"
 env_logger = "0.11"
 tar = "0.4.45"
+socket2 = "0.6.3"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

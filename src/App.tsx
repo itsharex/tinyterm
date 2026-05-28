@@ -8,6 +8,7 @@ import { FileManager } from './components/FileManager'
 import { CredentialsModal } from './components/CredentialsModal'
 import { HostsModal } from './components/HostsModal'
 import { AppDialogHost } from './components/AppDialogHost'
+import { LoginPromptDialog } from './components/LoginPromptDialog'
 import { ToastHost } from './components/ToastHost'
 
 import { listen } from '@tauri-apps/api/event'
@@ -412,6 +413,7 @@ export default function App() {
       {credentialsModalOpen && <CredentialsModal />}
       {hostsModalOpen && <HostsModal />}
       <AppDialogHost />
+      <LoginPromptDialog />
       <ToastHost />
     </div>
   )

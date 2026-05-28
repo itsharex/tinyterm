@@ -47,10 +47,7 @@ export function CredentialsModal() {
   }
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={e => e.target === e.currentTarget && closeCredentialsModal()}
-    >
+    <div className="modal-overlay">
       <div className="cm-shell">
         {/* Header */}
         <div className="cm-header">

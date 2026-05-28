@@ -21,6 +21,7 @@ pub struct CreateSessionRequest {
     pub cols: u32,
     pub rows: u32,
     pub password: Option<String>,
+    pub username: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -112,10 +113,14 @@ fn resolve_bookmark_for_connection(db_path: &DbPath, bookmark_id: &str) -> Resul
         .ok_or_else(|| "Bookmark not found".to_string())?;
 
     if bookmark.auth_type == "profile" {
-        let profile_id = bookmark
-            .profile_id
-            .clone()
-            .ok_or_else(|| "Host has auth_type=profile but no profile_id set".to_string())?;
+        let profile_id = match bookmark.profile_id.clone() {
+            Some(id) if !id.is_empty() => id,
+            _ => {
+                // No credential linked — return bookmark as-is (username/password
+                // will be supplied by the frontend via the request).
+                return Ok((bookmark, None));
+            }
+        };
         let profiles = storage::list_profiles(db_path).map_err(|e| e.to_string())?;
         let profile = profiles
             .iter()
@@ -185,12 +190,28 @@ pub fn create_session(
 
     let (bookmark, _) = resolve_bookmark_for_connection(&db_path, &request.bookmark_id)?;
 
+    // Apply username override from the request (used when no credential is linked)
+    let mut bookmark = bookmark;
+    if let Some(ref username) = request.username {
+        if !username.is_empty() {
+            bookmark.username = username.clone();
+            if bookmark.auth_type.is_empty() || bookmark.auth_type == "profile" {
+                bookmark.auth_type = "password".to_string();
+            }
+        }
+    }
+
     let password = request.password.as_deref();
     let sess = ssh::connect_ssh_transport(&bookmark).map_err(|e| e.to_string())?;
     let (trusted_host_fingerprint, trusted_host_key_type) = ensure_host_key_trusted(&db_path, &bookmark, &sess)?;
     ssh::authenticate_ssh(&sess, &bookmark, password).map_err(|e| e.to_string())?;
     let channel = ssh::open_shell_channel(&sess, &bookmark.term, request.cols, request.rows)
         .map_err(|e| e.to_string())?;
+
+    // Enable SSH-level keepalive: sends a keepalive request every 30 seconds
+    // of idle time. Combined with TCP keepalive, this ensures dead connections
+    // are detected even when the app window is hidden/occluded.
+    sess.set_keepalive(true, 30);
 
     // Non-blocking mode: reads return immediately when no data is available.
     sess.set_blocking(false);

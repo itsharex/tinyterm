@@ -74,6 +74,7 @@ interface AppState {
   credentialsModalOpen: boolean
   hostsModalOpen: boolean
   appDialog: AppDialogState | null
+  loginDialog: LoginDialogState | null
 
   // Actions - Data loading
   loadAll: () => Promise<void>
@@ -136,6 +137,14 @@ interface AppState {
     confirmText?: string
   }) => Promise<void>
   resolveAppDialog: (action: 'confirm' | 'cancel') => void
+
+  // Login prompt dialog
+  openLoginPrompt: (options: {
+    title: string
+    host: string
+    defaultUsername?: string
+  }) => Promise<{ username: string; password: string } | null>
+  resolveLoginDialog: (result: { username: string; password: string } | null) => void
 
   // Transfer progress
   updateTransfer: (progress: TransferProgress) => void
@@ -217,6 +226,39 @@ function settleAppDialog(
   resolve?.(action)
 }
 
+type LoginDialogState = {
+  title: string
+  host: string
+  defaultUsername?: string
+}
+
+let pendingLoginDialogResolve: ((result: { username: string; password: string } | null) => void) | null = null
+
+function showLoginDialog(
+  set: (partial: Partial<AppState>) => void,
+  dialog: LoginDialogState,
+): Promise<{ username: string; password: string } | null> {
+  if (pendingLoginDialogResolve) {
+    pendingLoginDialogResolve(null)
+    pendingLoginDialogResolve = null
+  }
+
+  return new Promise(resolve => {
+    pendingLoginDialogResolve = resolve
+    set({ loginDialog: dialog })
+  })
+}
+
+function settleLoginDialog(
+  set: (partial: Partial<AppState>) => void,
+  result: { username: string; password: string } | null,
+) {
+  const resolve = pendingLoginDialogResolve
+  pendingLoginDialogResolve = null
+  set({ loginDialog: null })
+  resolve?.(result)
+}
+
 type HostKeyPrompt = {
   host: string
   port: number
@@ -250,13 +292,14 @@ function buildHostKeyPromptMessage(prompt: HostKeyPrompt) {
   return `首次连接到该主机，需要确认 SSH 指纹。\n\n${summary}\n\n确认后会保存为受信任主机。`
 }
 
-async function createSessionWithTrust(bookmarkId: string, cols: number, rows: number, password?: string | null) {
+async function createSessionWithTrust(bookmarkId: string, cols: number, rows: number, password?: string | null, username?: string | null) {
   const connect = () => invoke<{ session_id: string }>('create_session', {
     request: {
       bookmark_id: bookmarkId,
       cols,
       rows,
       password: password ?? null,
+      username: username ?? null,
     },
   })
 
@@ -352,6 +395,7 @@ export const useStore = create<AppState>((set, get) => ({
   credentialsModalOpen: false,
   hostsModalOpen: false,
   appDialog: null,
+  loginDialog: null,
   toasts: [],
 
   // ── Data loading ──────────────────────────────────────────────────────────
@@ -625,7 +669,32 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Connect to backend
     try {
-      const result = await createSessionWithTrust(hostId, 80, 24, null)
+      // If no credential is linked, prompt for username/password
+      let loginUsername: string | null = null
+      let loginPassword: string | null = null
+      const cred = get().credentials.find(c => c.id === bookmark.profile_id)
+      if (!cred && !bookmark.profile_id) {
+        const loginResult = await get().openLoginPrompt({
+          title: '连接到 ' + (bookmark.title || bookmark.host),
+          host: bookmark.host,
+          defaultUsername: bookmark.username || '',
+        })
+        if (!loginResult) {
+          // User cancelled — remove the optimistic session tab
+          set(state => ({
+            bookmarkTabs: state.bookmarkTabs.map(tab =>
+              tab.id === tabId
+                ? { ...tab, sessions: tab.sessions.filter(s => s.id !== sessionTab.id) }
+                : tab
+            ),
+          }))
+          return
+        }
+        loginUsername = loginResult.username
+        loginPassword = loginResult.password
+      }
+
+      const result = await createSessionWithTrust(hostId, 80, 24, loginPassword, loginUsername)
 
       const localPath = await getHomeDir()
 
@@ -1038,6 +1107,16 @@ export const useStore = create<AppState>((set, get) => ({
 
   resolveAppDialog: (action) => {
     settleAppDialog(set as any, action)
+  },
+
+  // ── Login prompt dialog ────────────────────────────────────────────────────
+
+  openLoginPrompt: async ({ title, host, defaultUsername }) => {
+    return showLoginDialog(set as any, { title, host, defaultUsername })
+  },
+
+  resolveLoginDialog: (result) => {
+    settleLoginDialog(set as any, result)
   },
 
   // ── Transfer progress ─────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import './HostsModal.css'
 import {
-  X, Plus, PlugZap, Pencil, Trash2, Server, Search, ChevronRight, AlertCircle,
+  X, Plus, PlugZap, Pencil, Trash2, Server, Search, ChevronRight, AlertCircle, Copy,
 } from 'lucide-react'
 import { useStore } from '../store'
 import type { Bookmark, Profile } from '../types'
@@ -10,7 +10,8 @@ type HostFormData = {
   title: string
   host: string
   port: number
-  profile_id: string   // required — must link a Credential
+  profile_id: string   // optional — links a Credential if set
+  username: string      // used directly when no credential is selected
   color: string
   description: string
   start_directory_remote: string
@@ -18,8 +19,6 @@ type HostFormData = {
   encode: string
   enable_sftp: boolean
   keepalive_interval: number
-  // kept for Bookmark compat but always derived from credential
-  username: string
   auth_type: 'profile'
   password: string | undefined
   private_key: string | undefined
@@ -95,6 +94,12 @@ export function HostsModal() {
     setFormOpen(true)
   }
 
+  const handleDuplicate = (h: Bookmark) => {
+    // Open form pre-filled with the host's data, but editingHost=null so it creates new
+    setEditingHost({ ...h, id: '', title: h.title ? h.title + ' (副本)' : '' } as any)
+    setFormOpen(true)
+  }
+
   const handleDelete = async (id: string) => {
     const confirmed = await openConfirmDialog({
       title: '删除 Host',
@@ -107,16 +112,18 @@ export function HostsModal() {
   }
 
   const handleSave = async (data: HostFormData) => {
-    // Resolve username from credential
+    // Resolve username: prefer credential's username, fallback to form field
     const cred = credentials.find(c => c.id === data.profile_id)
     const resolved: Omit<Bookmark, 'id' | 'created_at' | 'updated_at' | 'password_encrypted'> = {
       ...data,
-      username: cred?.username ?? '',
+      username: cred?.username ?? data.username ?? '',
       auth_type: 'profile',
     }
-    if (editingHost) {
+    if (editingHost && editingHost.id) {
+      // Update existing
       await updateBookmark({ ...editingHost, ...resolved, password_encrypted: false })
     } else {
+      // Create new (including duplicate)
       await createBookmark(resolved)
     }
     setFormOpen(false)
@@ -124,10 +131,7 @@ export function HostsModal() {
   }
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={e => e.target === e.currentTarget && closeHostsModal()}
-    >
+    <div className="modal-overlay">
       <div className="hm-shell">
         {/* Header */}
         <div className="hm-header">
@@ -157,20 +161,11 @@ export function HostsModal() {
           <button
             className="hm-add-btn"
             onClick={() => { setEditingHost(null); setFormOpen(true) }}
-            disabled={credentials.length === 0}
-            title={credentials.length === 0 ? '请先创建 Credential' : '新建 Host'}
             aria-label="新建 Host"
           >
             <Plus size={15} strokeWidth={2.4} />
           </button>
         </div>
-
-        {credentials.length === 0 && (
-          <div className="hm-no-cred-tip">
-            <AlertCircle size={14} />
-            请先在 <strong>Credentials</strong> 中创建认证配置，再添加 Host
-          </div>
-        )}
 
         {/* List */}
         <div className="hm-list">
@@ -190,6 +185,7 @@ export function HostsModal() {
                   connecting={connectingHostId === h.id}
                   onConnect={() => handleConnect(h.id)}
                   onEdit={() => handleEdit(h)}
+                  onDuplicate={() => handleDuplicate(h)}
                   onDelete={() => handleDelete(h.id)}
                 />
               )
@@ -213,7 +209,7 @@ export function HostsModal() {
 // ── Host Row ──────────────────────────────────────────────────────────────────
 
 function HostRow({
-  host, unreachable, credential, connecting, onConnect, onEdit, onDelete,
+  host, unreachable, credential, connecting, onConnect, onEdit, onDuplicate, onDelete,
 }: {
   host: Bookmark
   unreachable: boolean
@@ -221,6 +217,7 @@ function HostRow({
   connecting: boolean
   onConnect: () => Promise<void>
   onEdit: () => void
+  onDuplicate: () => void
   onDelete: () => void
 }) {
   const dot = host.color || '#7c5cbf'
@@ -237,8 +234,14 @@ function HostRow({
             <span className="hm-row-cred-badge">
               {credential.auth_type === 'privateKey' ? 'key' : 'pwd'} · {credential.title}
             </span>
+          ) : host.username ? (
+            <span className="hm-row-cred-badge" style={{ opacity: 0.7 }}>
+              {host.username} · 手动输入
+            </span>
           ) : (
-            <span className="hm-row-cred-badge missing">无 Credential</span>
+            <span className="hm-row-cred-badge" style={{ opacity: 0.5 }}>
+              连接时输入
+            </span>
           )}
         </div>
       </div>
@@ -259,6 +262,9 @@ function HostRow({
         </button>
         <button className="hm-icon-btn" onClick={onEdit} title="编辑" disabled={connecting}>
           <Pencil size={14} strokeWidth={1.8} />
+        </button>
+        <button className="hm-icon-btn" onClick={onDuplicate} title="复制" disabled={connecting}>
+          <Copy size={14} strokeWidth={1.8} />
         </button>
         <button className="hm-icon-btn danger" onClick={onDelete} title="删除" disabled={connecting}>
           <Trash2 size={14} strokeWidth={1.8} />
@@ -281,6 +287,8 @@ function HostForm({
   const [form, setForm] = useState<HostFormData>(defaultForm(host ?? undefined))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
+  const isDuplicate = host ? !host.id : false
+  const formTitle = isDuplicate ? '复制 Host' : host ? '编辑 Host' : '新建 Host'
 
   const set = <K extends keyof HostFormData>(key: K, val: HostFormData[K]) =>
     setForm(prev => ({ ...prev, [key]: val }))
@@ -289,7 +297,6 @@ function HostForm({
 
   const handleSave = async () => {
     if (!form.host.trim()) { setError('请填写主机地址'); return }
-    if (!form.profile_id) { setError('请选择一个 Credential'); return }
     setError(undefined)
     setSaving(true)
     try { await onSave(form) } catch (e: any) { setError(String(e)) } finally { setSaving(false) }
@@ -301,7 +308,7 @@ function HostForm({
         <div className="hm-header">
           <div className="hm-header-left">
             <Server size={16} strokeWidth={1.8} />
-            <span>{host ? '编辑 Host' : '新建 Host'}</span>
+            <span>{formTitle}</span>
           </div>
           <button className="hm-close-btn" onClick={onCancel}><X size={16} /></button>
         </div>
@@ -328,13 +335,12 @@ function HostForm({
             </div>
           </div>
 
-          {/* Credential — required */}
+          {/* Credential — optional */}
           <div className="hf-field full">
-            <label className="hf-label">Credential *</label>
+            <label className="hf-label">Credential（可选）</label>
             {credentials.length === 0 ? (
-              <div className="hf-no-cred">
-                <AlertCircle size={13} />
-                请先创建 Credential
+              <div className="hf-no-cred" style={{ opacity: 0.7 }}>
+                暂无 Credential，连接时将提示输入用户名和密码
               </div>
             ) : (
               <div className="hf-cred-list">
@@ -342,7 +348,7 @@ function HostForm({
                   <button
                     key={c.id}
                     className={`hf-cred-item${form.profile_id === c.id ? ' selected' : ''}`}
-                    onClick={() => set('profile_id', c.id)}
+                    onClick={() => set('profile_id', form.profile_id === c.id ? '' : c.id)}
                     type="button"
                   >
                     <span className="hf-cred-dot">
@@ -398,8 +404,8 @@ function HostForm({
         <div className="hf-footer">
           <div className="hf-footer-group">
             <button className="btn-ghost" onClick={onCancel} disabled={saving}>取消</button>
-            <button className="btn-primary" onClick={handleSave} disabled={saving || credentials.length === 0}>
-              {saving ? '保存中...' : host ? '更新' : '创建'}
+            <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : (host && host.id) ? '更新' : '创建'}
             </button>
           </div>
         </div>
