@@ -1,6 +1,6 @@
 {
   "productName": "TinyTerm",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "identifier": "com.tinyterm.app",
   "build": {
     "beforeDevCommand": "npm run dev",

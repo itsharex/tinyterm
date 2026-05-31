@@ -122,6 +122,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   const [reconnecting, setReconnecting] = useState(false)
   const [showLoading, setShowLoading] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [pasteConfirm, setPasteConfirm] = useState<string | null>(null)
 
   const isAuthError =
     session.status === 'error' &&
@@ -180,6 +181,11 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return
 
+      // Let Ctrl/Cmd+V pass through so the native paste event fires
+      const isMac = navigator.platform.toUpperCase().includes('MAC')
+      const modifier = isMac ? event.metaKey : event.ctrlKey
+      if (modifier && event.key === 'v') return
+
       const data = encodeKeyEvent(event)
       if (!data) return
 
@@ -195,7 +201,10 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       sendToSession(data)
     })
 
-    // ── Copy/Paste shortcuts (scoped to terminal container) ───────────────
+    // ── Copy shortcut (scoped to terminal container) ──────────────────────
+    // Paste is NOT intercepted here — we let the native paste event reach
+    // the textarea, where `handlePasteEvent` captures it and shows our
+    // confirmation dialog. This avoids the browser's native "paste" prompt.
 
     const handleTerminalKeyDown = (event: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes('MAC')
@@ -212,20 +221,8 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
         }
         return
       }
-
-      if (modifier && event.key === 'v') {
-        event.preventDefault()
-        event.stopPropagation()
-        navigator.clipboard.readText()
-          .then(text => {
-            if (text) {
-              sendToSession(text)
-              addToast({ message: '粘贴成功', type: 'success' })
-            }
-          })
-          .catch(() => addToast({ message: '粘贴失败', type: 'error' }))
-        return
-      }
+      // Ctrl/Cmd+V is intentionally NOT handled here so the native paste
+      // event fires on the textarea and is caught by handlePasteEvent.
     }
 
     termRef.current?.addEventListener('keydown', handleTerminalKeyDown, true)
@@ -245,8 +242,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       event.preventDefault()
       const text = event.clipboardData?.getData('text')
       if (text) {
-        sendToSession(text)
-        addToast({ message: '粘贴成功', type: 'success' })
+        setPasteConfirm(text)
       }
     }
 
@@ -415,17 +411,29 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
   }
 
   const handleMenuPaste = () => {
-    const resolvedSessionId = backendSessionId ?? session.sessionId
-    if (!resolvedSessionId) return
-    navigator.clipboard.readText()
-      .then(text => {
-        if (text) {
-          invoke('write_to_session', { sessionId: resolvedSessionId, data: text }).catch(() => {})
-          addToast({ message: '粘贴成功', type: 'success' })
-        }
-      })
-      .catch(() => addToast({ message: '粘贴失败', type: 'error' }))
     setContextMenu(null)
+    if (session.status !== 'connected') return
+    // Trigger native paste via the textarea so handlePasteEvent catches it
+    // without triggering the browser's clipboard permission prompt.
+    const term = xtermRef.current
+    if (term?.textarea) {
+      term.textarea.focus()
+      document.execCommand('paste')
+    }
+  }
+
+  const handlePasteConfirm = () => {
+    if (!pasteConfirm) return
+    const resolvedSessionId = backendSessionId ?? session.sessionId
+    if (resolvedSessionId) {
+      invoke('write_to_session', { sessionId: resolvedSessionId, data: pasteConfirm }).catch(() => {})
+      addToast({ message: '粘贴成功', type: 'success' })
+    }
+    setPasteConfirm(null)
+  }
+
+  const handlePasteCancel = () => {
+    setPasteConfirm(null)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -511,6 +519,15 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
         </>,
         document.body,
       )}
+
+      {pasteConfirm !== null && createPortal(
+        <PasteConfirmDialog
+          text={pasteConfirm}
+          onConfirm={handlePasteConfirm}
+          onCancel={handlePasteCancel}
+        />,
+        document.body,
+      )}
     </div>
   )
 }
@@ -566,6 +583,67 @@ function ContextMenu({ x, y, onCopy, onPaste, canCopy }: ContextMenuProps) {
         <ClipboardPaste size={13} />
         <span>粘贴</span>
       </button>
+    </div>
+  )
+}
+
+// ── Paste Confirm Dialog ──────────────────────────────────────────────────
+
+interface PasteConfirmDialogProps {
+  text: string
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteConfirmDialogProps) {
+  const confirmBtnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault()
+        onConfirm()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [onConfirm, onCancel])
+
+  useEffect(() => {
+    confirmBtnRef.current?.focus()
+  }, [])
+
+  const lineCount = text.split('\n').length
+  const charCount = text.length
+  const preview = text.length > 2000 ? text.slice(0, 2000) + '\n...' : text
+
+  return (
+    <div className="paste-confirm-overlay" onClick={onCancel}>
+      <div className="paste-confirm-dialog" onClick={e => e.stopPropagation()}>
+        <div className="paste-confirm-header">
+          <ClipboardPaste size={16} />
+          <span>粘贴确认</span>
+          <span className="paste-confirm-meta">{lineCount} 行 · {charCount} 字符</span>
+        </div>
+        <div className="paste-confirm-preview">
+          <pre>{preview}</pre>
+        </div>
+        <div className="paste-confirm-actions">
+          <button className="paste-confirm-btn cancel" onClick={onCancel}>
+            取消
+          </button>
+          <button
+            ref={confirmBtnRef}
+            className="paste-confirm-btn confirm"
+            onClick={onConfirm}
+          >
+            确认
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

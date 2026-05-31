@@ -204,6 +204,148 @@
   cursor: default;
 }
 
+/* ── Paste Confirm Dialog ────────────────────────────────────────────────── */
+
+.paste-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 16, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: paste-fade-in 0.15s ease;
+}
+
+@keyframes paste-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.paste-confirm-dialog {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  width: 480px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: paste-slide-up 0.2s ease;
+}
+
+@keyframes paste-slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.paste-confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.paste-confirm-header svg {
+  color: var(--color-accent-light, #80b0ff);
+  flex-shrink: 0;
+}
+
+.paste-confirm-meta {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.paste-confirm-preview {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px;
+  max-height: 45vh;
+}
+
+.paste-confirm-preview pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: rgba(58, 132, 255, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+
+.paste-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.paste-confirm-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  border: 1px solid transparent;
+}
+
+.paste-confirm-btn.cancel {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.paste-confirm-btn.cancel:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-active);
+}
+
+.paste-confirm-btn.confirm {
+  background: rgba(58, 132, 255, 0.25);
+  border-color: var(--color-border-active);
+  color: var(--color-text-primary);
+}
+
+.paste-confirm-btn.confirm:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.paste-confirm-btn.confirm:focus-visible {
+  outline: 2px solid var(--color-accent-light, #80b0ff);
+  outline-offset: 2px;
+}
+
+.terminal-contextmenu-item:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .terminal-contextmenu-divider {
   height: 1px;
   margin: 2px 4px;
