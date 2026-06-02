@@ -36,7 +36,7 @@ const TERMINAL_THEME = {
   brightWhite: '#d7e1ea',
 }
 
-function encodeKeyEvent(event: KeyboardEvent): string | null {
+function encodeKeyEvent(event: KeyboardEvent, appCursorKeys: boolean): string | null {
   if (event.metaKey) return null
 
   if (event.ctrlKey && !event.altKey) {
@@ -56,6 +56,10 @@ function encodeKeyEvent(event: KeyboardEvent): string | null {
     }
   }
 
+  // In application cursor mode (DECCKM), set by vim etc., arrow keys
+  // and Home/End use SS3 (\x1bO) instead of CSI (\x1b[).
+  const escPrefix = appCursorKeys ? '\x1bO' : '\x1b['
+
   switch (event.key) {
     case 'Enter':
       return '\r'
@@ -66,17 +70,17 @@ function encodeKeyEvent(event: KeyboardEvent): string | null {
     case 'Escape':
       return '\x1b'
     case 'ArrowUp':
-      return '\x1b[A'
+      return escPrefix + 'A'
     case 'ArrowDown':
-      return '\x1b[B'
+      return escPrefix + 'B'
     case 'ArrowRight':
-      return '\x1b[C'
+      return escPrefix + 'C'
     case 'ArrowLeft':
-      return '\x1b[D'
+      return escPrefix + 'D'
     case 'Home':
-      return '\x1b[H'
+      return escPrefix + 'H'
     case 'End':
-      return '\x1b[F'
+      return escPrefix + 'F'
     case 'Delete':
       return '\x1b[3~'
     case 'Insert':
@@ -186,7 +190,7 @@ export function TerminalView({ session, isVisible, backendSessionId }: Props) {
       const modifier = isMac ? event.metaKey : event.ctrlKey
       if (modifier && event.key === 'v') return
 
-      const data = encodeKeyEvent(event)
+      const data = encodeKeyEvent(event, term.modes.applicationCursorKeysMode)
       if (!data) return
 
       event.preventDefault()
